@@ -33,3 +33,7 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+trachello/config/config.ini
+trachello/build/*
+trachello/dist/*
