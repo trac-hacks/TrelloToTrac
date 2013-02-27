@@ -34,6 +34,7 @@ nosetests.xml
 .project
 .pydevproject
 
-trachello/config/config.ini
-trachello/build/*
-trachello/dist/*
+trello-plugin/build/*
+trello-plugin/dist/*
+trello-plugin/task/trac.dump
+trello-plugin/task/resetsvn.sh
