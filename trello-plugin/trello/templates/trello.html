@@ -16,6 +16,23 @@
             <h1>Trello</h1>
             <p><em>id:</em>${board_id}</p>
             <p><em>name:</em>${board_name}</p>
+            <p>Lists:</p>
+            <ul>
+                <li py:for="l in lists">
+                    <py:for each="k, v in l.iteritems()">
+                    <span><em>${k}:</em>${v}</span><br/>
+                    </py:for>
+                </li>
+            </ul>
+            
+            <p>Cards</p>
+            <ul>
+                <li py:for="c in cards">
+                    <py:for each="k, v in c.iteritems()">
+                    <span><em>${k}:</em>${v}</span><br/>
+                    </py:for>
+                </li>
+            </ul>
     </div>
   </body>
 </html>

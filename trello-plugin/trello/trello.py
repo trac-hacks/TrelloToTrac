@@ -4,7 +4,7 @@ from trac.core import *
 from trac.web import IRequestHandler
 from trac.web.chrome import INavigationContributor, ITemplateProvider
 
-import trellomulino
+import trelloclient
 
 class TracTrelloPlugin(Component):
 
@@ -25,14 +25,38 @@ class TracTrelloPlugin(Component):
         	return re.match(r'/trello(?:_trac)?(?:/.*)?$', req.path_info)
     def process_request(self, req):
         data = {}
-        api_key = self.config.get('trello', 'api_key') 
-        user_auth_token = self.config.get('trello', 'user_auth_token') 
-        board_id = self.config.get('trello', 'board_id') 
-        data['board_id'] = board_id
-        trelloMulino = trellomulino.TrelloMulino(api_key,user_auth_token)
-        board = trelloMulino.getBoards(board_id)
-        data['board_name'] = board['name']
+        apiKey = self.config.get('trello', 'api_key') 
+        userAuthToken = self.config.get('trello', 'user_auth_token') 
+        boardId = self.config.get('trello', 'board_id') 
+        listId = self.config.get('trello', 'list_id') 
+        data['board_id'] = boardId
+        data['list_id'] = listId
 
+        trello = trelloclient.TrelloClient(apiKey,userAuthToken)
+        board = trelloclient.TrelloBoard(trello, boardId)
+        theList = trelloclient.TrelloList(trello, listId)
+
+        boardInformation = board.getBoardInformation()
+        data['board_name'] = boardInformation['name']
+
+        listInformation = theList.getListInformation()
+        data['list_name'] = listInformation['name']
+
+        #elenco liste
+        listsView = []
+        boardLists = board.getLists()
+        for l in boardLists:
+            listInfo = l.getListInformation()
+            listsView.append(listInfo)
+        data['lists'] = listsView
+            
+        cardsView = []
+        cards = theList.getCards()
+        for c in cards:
+            cardInformation = c.getCardInformation()
+            cardsView.append(cardInformation)
+        data['cards'] = cardsView
+        
         # This tuple is for Genshi (template_name, data, content_type)
         # Without data the trac layout will not appear.
         return 'trello.html', data, None
