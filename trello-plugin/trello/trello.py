@@ -5,6 +5,7 @@ from trac.web import IRequestHandler
 from trac.web.chrome import INavigationContributor, ITemplateProvider
 
 import trelloclient
+import markdowntowiki
 
 class TracTrelloPlugin(Component):
 
@@ -43,20 +44,96 @@ class TracTrelloPlugin(Component):
         data['list_name'] = listInformation['name']
 
         #elenco liste
-        listsView = []
+        """listsView = []
         boardLists = board.getLists()
         for l in boardLists:
             listInfo = l.getListInformation()
             listsView.append(listInfo)
-        data['lists'] = listsView
+        data['lists'] = listsView"""
             
         cardsView = []
         cards = theList.getCards()
         for c in cards:
-            cardInformation = c.getCardInformation()
-            cardsView.append(cardInformation)
+            cardContent = {}
+            cardInformation = c.getCardInformation()            
+
+            #Content
+            cardContent['id'] = cardInformation['id']
+            cardContent['name'] = cardInformation['name']
+            #covert desc markdown to trac wiki
+            m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
+            cardContent['desc'] = m2w.convert()
+            
+            #comments
+            commentsView = []
+            cardId = cardInformation['id']
+            card = trelloclient.TrelloCard(trello, cardId)
+            comments = card.getComments()
+
+            for c in comments:
+                cView = {}
+                cView['idMemberCreator'] = c['idMemberCreator']
+                cView['user'] = self.getUserByTrelloId(c['idMemberCreator'])
+                cView['date'] = c['date']
+                cView['text'] = c['data']['text']
+                commentsView.append(cView)                   
+
+            cardContent['comments'] = commentsView
+            #self.log.debug("COMMENTS %s" % repr(commentsView))
+            
+            #checklist
+            checklistsView = []
+            checklists = card.getChecklists()
+            #self.log.debug("CHECKLISTS %s" % repr(checklists))
+            for c in checklists:
+                checklist = trelloclient.TrelloChecklist(trello, c)
+                checklist = checklist.getChecklistInformation()
+                #self.log.debug("CHECKLIST %s" % repr(checklist))
+                cView = {}
+                cView['name'] = checklist['name']
+                cView['checkItems'] = checklist['checkItems'] 
+                self.log.debug("CHECKLISTS %s" % repr(cView))
+                checklistsView.append(cView)                   
+
+            cardContent['checklists'] = checklistsView
+
+            #attachments
+            attachmentsView = []
+            attachments = card.getAttachments()
+            #self.log.debug("ATTACHMENTS %s" % repr(attachments))
+            for a in attachments:
+                aView = {}
+                aView['name'] = a['name']
+                aView['url'] = a['url']
+                attachmentsView.append(aView)                   
+
+            cardContent['attachments'] = attachmentsView
+
+
+            #etichetta
+            
+
+
+
+            #append
+            cardsView.append(cardContent)
+
         data['cards'] = cardsView
+
+
+
+
+        cardsDebugView = []
+        cards = theList.getCards()
+        for c in cards:
+            cardInformation = c.getCardInformation()
+            #for debug output
+            cardsDebugView.append(cardInformation)
+        data['cardsDebug'] = cardsDebugView
+
         
+
+
         # This tuple is for Genshi (template_name, data, content_type)
         # Without data the trac layout will not appear.
         return 'trello.html', data, None
@@ -67,3 +144,13 @@ class TracTrelloPlugin(Component):
         return [resource_filename(__name__, 'templates')]
     def get_htdocs_dirs(self):
         return []
+
+    def getUserByTrelloId(self, id):
+        user = self.config.get('trello-user', id)
+        if len(user) == 0:
+            user = None
+        return user
+
+
+
+    

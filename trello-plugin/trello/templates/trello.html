@@ -16,20 +16,64 @@
             <h1>Trello</h1>
             <p><em>id:</em>${board_id}</p>
             <p><em>name:</em>${board_name}</p>
-            <p>Lists:</p>
+
+<!--            !<p>Lists:</p>
             <ul>
                 <li py:for="l in lists">
                     <py:for each="k, v in l.iteritems()">
                     <span><em>${k}:</em>${v}</span><br/>
                     </py:for>
                 </li>
-            </ul>
+            </ul>-->
             
             <p>Cards</p>
             <ul>
                 <li py:for="c in cards">
+                    ${c.id}
+                    <ul>
+                        <li><em>name:</em>${c.name}</li>
+                        <li><em>wiki desc:</em>${c.desc}</li>
+                        <li><em>comments:</em>
+                            <ul>
+                                <li py:for="com in c.comments">
+                                    <py:for each="k, v in com.iteritems()">
+                                    <span><em>${k}:</em>${v}</span><br/>
+                                    </py:for>
+                                </li>
+                            </ul>
+                        </li>
+                        <li><em>checklists:</em>
+                            <ul>
+                                <li py:for="com in c.checklists">
+                                    <py:for each="k, v in com.iteritems()">
+                                        <span><em>${k}:</em>${v}</span><br/>
+                                        <!-- !<py:if k="checkItems">
+                                            <b>ITEMS</b>
+                                            </py:if> -->
+                                    </py:for>
+                                </li>
+                            </ul>
+                        </li>
+                        <li><em>attachments:</em>
+                            <ul>
+                                <li py:for="a in c.attachments">
+                                    <py:for each="k, v in a.iteritems()">
+                                    <span><em>${k}:</em>${v}</span><br/>
+                                    </py:for>
+                                </li>
+                            </ul>
+                        </li>
+                     </ul>
+                </li>
+            </ul>
+            
+            <hr/>
+            <hr/> 
+            <p>CardsDebug</p>
+            <ul>
+                <li py:for="c in cardsDebug">
                     <py:for each="k, v in c.iteritems()">
-                    <span><em>${k}:</em>${v}</span><br/>
+                    <span><em>${k}:</em><pre>${v}</pre></span><br/>
                     </py:for>
                 </li>
             </ul>
