@@ -10,5 +10,7 @@ setup(
         [trac.plugins]
         trello = trello
     """,
-    package_data={'trello': ['templates/*.html']},
+    package_data={'trello': ['templates/*.html',
+                            'htdocs/css/*.css', 
+                            'htdocs/images/*']},
 )
