@@ -21,6 +21,22 @@
          <p><em>id:</em>${board_id}</p>
          <p><em>name:</em>${board_name}</p>
 
+        <form class="mod" id="trello" method="post" action="">
+            <div class="field">
+                <label>Milestone (required):<br />
+                        <input type="text" name="milestone" value="${milestone}" placeholder="${milestone}" />
+                </label>
+            </div>
+            <div class="field">
+                <label>Iteration (required):<br />
+                        <input type="text" name="iteration" value="${iteration}" placeholder="${iteration}" />
+                </label>
+            </div>
+            <div class="buttons">
+                <input type="submit" value="Import Card" py:attrs="sendbutton_attr"/>
+            </div>
+        </form>
+        <br style="clear: right" />
        </div>
 
     </div>
