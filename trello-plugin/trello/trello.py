@@ -41,7 +41,8 @@ class TracTrelloPlugin(Component):
                 return True
 
     def process_request(self, req):
-        response = self.controller(req.args.get('controller'), req)
+        controller = self.controller(req.args.get('controller'))
+        response = controller(req)
 
         return response
 
@@ -64,14 +65,14 @@ class TracTrelloPlugin(Component):
 
     #controllers
 
-    def controller(self, x, req ):
+    def controller(self, x):
         return {
-            None: self.indexController(req),
-            'test': self.testController(req),
+            'test': self.testController,
+            None: self.indexController,
             }[x]
 
     def indexController(self, req):
-        
+        self.log.debug("START INDEX CONTROLLER")
         #start db
         db = self.env.get_db_cnx()
         cursor = db.cursor()
@@ -91,12 +92,8 @@ class TracTrelloPlugin(Component):
 
         boardInformation = board.getBoardInformation()
         listInformation = theList.getListInformation()
+        listActions = theList.getActions()
         
-
-        #sql = "SELECT * FROM ticket WHERE (milestone IS NULL OR milestone = '') AND status NOT LIKE ('closed')";
-        #cursor.execute(sql)
-        #tickets = cursor.fetchall()
-        #data['tickets'] = tickets
         if req.method == 'POST':
             error_msg = None
             for field in ('milestone', 'iteration'):
@@ -104,13 +101,14 @@ class TracTrelloPlugin(Component):
                 if len(value) == 0:
                     error_msg = 'You must fill in the field "' + TracTrelloPlugin.__FIELD_NAMES[field] + '".'
                     break
-                #@TODO
-                #validate milestone exist
-                if field == 'milestone' and False:           
-                    milestone = value
-                    error_msg = 'Milestone is invalid.'
-                    self.log.info("Invalid Milestone encountered: " + value)
-                    break
+                #validate milestone exist                
+                if field == 'milestone':           
+                    result = self.validateMilestone(value)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        milestone = result['milestone']
                 #@TODO
                 #validate iteration exist
                 if field == 'iteration' and False:           
@@ -122,30 +120,36 @@ class TracTrelloPlugin(Component):
                 add_warning(req, error_msg)
                 data = req.args
             else:
-                milestone = req.args.get('milestone').strip()
                 #general ticket data
                 now = datetime.now()
                 timestamp = int(time.mktime(now.timetuple()))
-                #@TODO
-                owner = 'magni'
-                reporter = 'trello'
-                version = 'version'
-
-
+                owner = ''
+                version = ''
+                
                 cards = theList.getCards()
                 for c in cards:
                     cardContent = {}
                     cardInformation = c.getCardInformation()            
-    
+                    self.log.debug("CARD %s" % repr(cardInformation))
+
                     #Content
                     cardContent['id'] = cardInformation['id']
                     cardContent['name'] = cardInformation['name']
                     #covert desc markdown to trac wiki
                     m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
-                    cardContent['desc'] = m2w.convert()
+                    cardContent['desc'] = m2w.convert() + '[[br]]'
                     
                     cardId = cardInformation['id']
                     card = trelloclient.TrelloCard(trello, cardId)
+                    idMemberCreator = card.getIdMemberCreator(listActions, cardId)
+                    self.log.debug("CREATOR %s" % repr(idMemberCreator))
+                    reporter = self.getUserByTrelloId(idMemberCreator)
+                    members=card.getMembers()
+                    #cc alla assigned member
+                    cc=''
+                    for m in members:
+                        tracUser = self.getUserByTrelloId(m['id'])
+                        cc += tracUser
 
                     #checklist
                     checklists = card.getChecklists()
@@ -156,13 +160,20 @@ class TracTrelloPlugin(Component):
                         for item in checklist['checkItems']:
                             cardContent['desc'] += ' * ' + item['name'] + '\n'
 
-                    #@TODO
                     #import attachments
-                    
+                    attachments = card.getAttachments()
+                    for a in attachments:
+                        self.log.debug("ATTACHMENTS %s" % repr(attachments))
+                        cardContent['desc'] += '[[br]] \n\'\'\'Attachment:\'\'\' [[br]]\n\'\'' + a['name'] + '\'\' [[br]]\n' + a['url'] + ' [[br]]\n' 
+
+                    #labels
+                    for label in cardInformation['labels']:
+                        cardContent['desc'] += '[[br]] \n\'\'\'Label:\'\'\' \'\'' + label['name'] + '\'\' [[br]]\n'
+
                     #insert card in ticket
                     try:
                         #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
-                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', timestamp, timestamp, '', '', '', owner, reporter, '', version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
+                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', timestamp, timestamp, '', '', '', owner, reporter, cc, version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
                         idTicket = cursor.fetchone()[0]
                         #comment
                         comments = card.getComments()
@@ -191,14 +202,18 @@ class TracTrelloPlugin(Component):
         data['list_id'] = listId
         data['board_name'] = boardInformation['name']
         data['list_name'] = listInformation['name']
+        data['milestone_placeholder'] = '6.2'
+        data['iteration_placeholder'] = 'iteration name'
         add_stylesheet(req, 'trello/css/trello.css')
 
         # This tuple is for Genshi (template_name, data, content_type)
         # Without data the trac layout will not appear.
         return 'trello.html', data, None
 
+    
     def testController(self, req):
 
+        self.log.debug("START TEST CONTROLLER")
         data = {}
         apiKey = self.config.get('trello', 'api_key') 
         userAuthToken = self.config.get('trello', 'user_auth_token') 
@@ -241,6 +256,7 @@ class TracTrelloPlugin(Component):
             #comments
             commentsView = []
             cardId = cardInformation['id']
+            self.log.debug("COMMENTS %s" % repr(cardInformation))
             card = trelloclient.TrelloCard(trello, cardId)
             comments = card.getComments()
 
@@ -258,15 +274,12 @@ class TracTrelloPlugin(Component):
             #checklist
             checklistsView = []
             checklists = card.getChecklists()
-            #self.log.debug("CHECKLISTS %s" % repr(checklists))
             for c in checklists:
                 checklist = trelloclient.TrelloChecklist(trello, c)
                 checklist = checklist.getChecklistInformation()
-                #self.log.debug("CHECKLIST %s" % repr(checklist))
                 cView = {}
                 cView['name'] = checklist['name']
                 cView['checkItems'] = checklist['checkItems'] 
-                self.log.debug("CHECKLISTS %s" % repr(cView))
                 checklistsView.append(cView)                   
 
             cardContent['checklists'] = checklistsView
@@ -294,19 +307,26 @@ class TracTrelloPlugin(Component):
 
         data['cards'] = cardsView
 
-
-
-
-        cardsDebugView = []
-        cards = theList.getCards()
-        for c in cards:
-            cardInformation = c.getCardInformation()
-            #for debug output
-            cardsDebugView.append(cardInformation)
-        data['cardsDebug'] = cardsDebugView
-
-
         # This tuple is for Genshi (template_name, data, content_type)
         # Without data the trac layout will not appear.
         return 'test.html', data, None
-    
+   
+
+
+    #Utility
+    def validateMilestone(self, milestone):
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        if not re.match(r'^[0-9]{1,2}\.[0-9]{1,2}$', milestone):            
+            self.log.info("Milestone Trunk encountered: " + milestone)
+            return {'res':False, 'msg':'Invalid milestone format'}
+        releasePrefix = self.config.get('trello','release.prefix') 
+        trunkValue = releasePrefix+milestone+'.0'
+        sql = "SELECT * FROM milestone WHERE completed = 0 AND name LIKE %s"
+        cursor.execute(sql, [trunkValue])
+        rowTrunk = cursor.fetchone()
+        if rowTrunk is None:
+            return {'res':False, 'msg':'Milestone is not exist or not open.'}
+        else:
+            return {'res':True, 'milestone' : trunkValue}
+

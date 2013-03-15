@@ -17,11 +17,16 @@ class TrelloBoard(Board):
         Board.__init__(self, trelloClient, boardId )
         #super(TrelloBoard, self).__init__( trelloClient, boardId )
 
-
 class TrelloList(List):
     def __init__(self, trelloClient, listId):
         List.__init__(self, trelloClient, listId )
         #super(TrelloList, self).__init__( trelloClient, listId )
+    
+    def getActions(self):
+        return self.fetchJson( 
+        uri_path = self.base_uri+'/actions',
+        query_params = {'fields' : 'all'}
+        )
 
 class TrelloCard(Card):
     def __init__(self, trelloCard, cardId):
@@ -45,6 +50,28 @@ class TrelloCard(Card):
         uri_path = self.base_uri+'/attachments',
         query_params = {}
         )
+
+    def getMembers(self):
+        response = self.fetchJson( 
+        uri_path = self.base_uri,
+        query_params = {'members' : 'true', 'limit' : 300}
+        )
+        return response['members']
+
+    #Don't work api
+    #def getIdMemberCreator(self):
+    #    return self.fetchJson( 
+    #    uri_path = self.base_uri,
+    #    query_params = {'action_fields' : 'idMemberCreator'}
+    #    )
+
+    #get only for card with few action
+    #@TODO tofix
+    def getIdMemberCreator(self, listActions, cardId):
+        for l in listActions:
+            if l['data']['card']['id'] == cardId and l['type'] == 'createCard':
+                return l['idMemberCreator']
+
 
 class TrelloChecklist(Checklist):
     def __init__(self, trelloClient, checklistId):

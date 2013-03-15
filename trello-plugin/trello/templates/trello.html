@@ -18,18 +18,20 @@
        <xi:include href="trello_menu.html" />
        <div id="tabcontent">
          <h2>Trello To Trac</h2>
-         <p><em>id:</em>${board_id}</p>
-         <p><em>name:</em>${board_name}</p>
+         <p><em>board id:</em>${board_id}</p>
+         <p><em>board name:</em>${board_name}</p>
+         <p><em>list id:</em>${list_id}</p>
+         <p><em>list name:</em>${list_name}</p>
 
         <form class="mod" id="trello" method="post" action="">
             <div class="field">
                 <label>Milestone (required):<br />
-                        <input type="text" name="milestone" value="${milestone}" placeholder="${milestone}" />
+                        <input type="text" name="milestone" value="${milestone}" placeholder="${milestone_placeholder}" />
                 </label>
             </div>
             <div class="field">
                 <label>Iteration (required):<br />
-                        <input type="text" name="iteration" value="${iteration}" placeholder="${iteration}" />
+                        <input type="text" name="iteration" value="${iteration}" placeholder="${iteration_placeholder}" />
                 </label>
             </div>
             <div class="buttons">
