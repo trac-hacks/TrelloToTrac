@@ -10,39 +10,29 @@
   </head>
 
   <body>
-      <div id="ctxtnav" class="nav">
-      </div>
+    <div id="ctxtnav" class="nav"></div>
 
-     <div id="content">
-       <h1>Trello</h1>
-       <xi:include href="trello_menu.html" /> 
-       <div id="tabcontent">
-         <h2>Trello To Trac</h2>
-         <p>
-         <em>board id:</em>${board_id}<br/>
-         <em>board name:</em>${board_name}<br/>
-         <em>list id:</em>${list_id}<br/>
-         <em>list name:</em>${list_name}<br/>
-         </p>
-
-        <form class="mod" id="trello" method="post" action="">
-            <div class="field">
-                <label>Milestone (required):<br />
-                        <input type="text" name="milestone" value="${milestone}" placeholder="${milestone_placeholder}" />
-                </label>
-            </div>
-            <div class="field">
-                <label>Iteration (required):<br />
-                        <input type="text" name="iteration" value="${iteration}" placeholder="${iteration_placeholder}" />
-                </label>
-            </div>
-            <div class="buttons">
-                <input type="submit" value="Import Card" py:attrs="sendbutton_attr"/>
-            </div>
-        </form>
-        <br style="clear: right" />
-       </div>
-
+    <div id="content">
+            <h1>Trello</h1>
+            <p><em>id:</em>${board_id}</p>
+            <p><em>name:</em>${board_name}</p>
+            <p>Lists:</p>
+            <ul>
+                <li py:for="l in lists">
+                    <py:for each="k, v in l.iteritems()">
+                    <span><em>${k}:</em>${v}</span><br/>
+                    </py:for>
+                </li>
+            </ul>
+            
+            <p>Cards</p>
+            <ul>
+                <li py:for="c in cards">
+                    <py:for each="k, v in c.iteritems()">
+                    <span><em>${k}:</em>${v}</span><br/>
+                    </py:for>
+                </li>
+            </ul>
     </div>
   </body>
 </html>
