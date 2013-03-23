@@ -4,13 +4,23 @@ from trac.core import *
 from trac.web import IRequestHandler
 from trac.web.chrome import INavigationContributor, ITemplateProvider, add_warning, add_notice, add_stylesheet
 
+import time
+from datetime import date, datetime, timedelta
+from trac.util.datefmt import parse_date, utc, to_timestamp, to_datetime, \
+                              get_date_format_hint, get_datetime_format_hint, \
+                              format_date, format_datetime
+
 import trelloclient
 import markdowntowiki
 
 class TracTrelloPlugin(Component):
 
     implements(INavigationContributor, IRequestHandler, ITemplateProvider)
-   
+    
+    __FIELD_NAMES = { 'milestone' : 'Milestone',
+                      'iteration' : 'Iteration',
+                    }
+
     # INavigationContributor methods
     def get_active_navigation_item(self, req):
         return 'Trello'
@@ -61,25 +71,126 @@ class TracTrelloPlugin(Component):
             }[x]
 
     def indexController(self, req):
+        
+        #start db
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
 
         data = {}
+        
+        #get trello conf
         apiKey = self.config.get('trello', 'api_key') 
         userAuthToken = self.config.get('trello', 'user_auth_token') 
         boardId = self.config.get('trello', 'board_id') 
         listId = self.config.get('trello', 'list_id') 
-        data['board_id'] = boardId
-        data['list_id'] = listId
 
+        #start trello 
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
         board = trelloclient.TrelloBoard(trello, boardId)
         theList = trelloclient.TrelloList(trello, listId)
 
         boardInformation = board.getBoardInformation()
-        data['board_name'] = boardInformation['name']
-
         listInformation = theList.getListInformation()
-        data['list_name'] = listInformation['name']
         
+
+        #sql = "SELECT * FROM ticket WHERE (milestone IS NULL OR milestone = '') AND status NOT LIKE ('closed')";
+        #cursor.execute(sql)
+        #tickets = cursor.fetchall()
+        #data['tickets'] = tickets
+        if req.method == 'POST':
+            error_msg = None
+            for field in ('milestone', 'iteration'):
+                value = req.args.get(field).strip()
+                if len(value) == 0:
+                    error_msg = 'You must fill in the field "' + TracTrelloPlugin.__FIELD_NAMES[field] + '".'
+                    break
+                #@TODO
+                #validate milestone exist
+                if field == 'milestone' and False:           
+                    milestone = value
+                    error_msg = 'Milestone is invalid.'
+                    self.log.info("Invalid Milestone encountered: " + value)
+                    break
+                #@TODO
+                #validate iteration exist
+                if field == 'iteration' and False:           
+                    milestone = value
+                    error_msg = 'Iteration is invalid.'
+                    self.log.info("Invalid Iteration encountered: " + value)
+                    break
+            if error_msg:
+                add_warning(req, error_msg)
+                data = req.args
+            else:
+                milestone = req.args.get('milestone').strip()
+                #general ticket data
+                now = datetime.now()
+                timestamp = int(time.mktime(now.timetuple()))
+                #@TODO
+                owner = 'magni'
+                reporter = 'trello'
+                version = 'version'
+
+
+                cards = theList.getCards()
+                for c in cards:
+                    cardContent = {}
+                    cardInformation = c.getCardInformation()            
+    
+                    #Content
+                    cardContent['id'] = cardInformation['id']
+                    cardContent['name'] = cardInformation['name']
+                    #covert desc markdown to trac wiki
+                    m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
+                    cardContent['desc'] = m2w.convert()
+                    
+                    cardId = cardInformation['id']
+                    card = trelloclient.TrelloCard(trello, cardId)
+
+                    #checklist
+                    checklists = card.getChecklists()
+                    for c in checklists:
+                        checklist = trelloclient.TrelloChecklist(trello, c)
+                        checklist = checklist.getChecklistInformation()
+                        cardContent['desc'] += '[[br]] \n\'\'\'Checklist:\'\'\' [[br]]\n\'\'' + checklist['name'] + '\'\' [[br]]\n'
+                        for item in checklist['checkItems']:
+                            cardContent['desc'] += ' * ' + item['name'] + '\n'
+
+                    #@TODO
+                    #import attachments
+                    
+                    #insert card in ticket
+                    try:
+                        #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
+                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', timestamp, timestamp, '', '', '', owner, reporter, '', version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
+                        idTicket = cursor.fetchone()[0]
+                        #comment
+                        comments = card.getComments()
+
+                        for c in comments:
+                            #@TODO data to timestamp
+                            #c['date']
+                            timestamp = timestamp + 1
+                            userComment = self.getUserByTrelloId(c['idMemberCreator'])
+                            
+                            cursor.execute("INSERT INTO ticket_change VALUES ((%s),(%s),(%s),(%s),(%s),(%s))",[idTicket,timestamp,userComment,'comment', '',c['data']['text']])
+                    except:
+                        db.rollback()
+                        raise
+                    db.commit()
+
+                    notice_msg='Inserita la card %s' % (cardContent['name']);
+                    add_notice(req, notice_msg)
+
+                    if error_msg:
+                        add_warning(req, error_msg)
+                        data = req.args
+    
+        #forever view date
+        data['board_id'] = boardId
+        data['list_id'] = listId
+        data['board_name'] = boardInformation['name']
+        data['list_name'] = listInformation['name']
         add_stylesheet(req, 'trello/css/trello.css')
 
         # This tuple is for Genshi (template_name, data, content_type)
