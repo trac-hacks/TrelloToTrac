@@ -24,8 +24,8 @@ class TrelloList(List):
     
     def getActions(self):
         return self.fetchJson( 
-        uri_path = self.base_uri+'/actions',
-        query_params = {'fields' : 'all'}
+            uri_path = self.base_uri+'/actions',
+            query_params = {'fields' : 'all'}
         )
 
 class TrelloCard(Card):
@@ -35,42 +35,35 @@ class TrelloCard(Card):
 
     def getComments(self):
         return self.fetchJson( 
-        uri_path = self.base_uri+'/actions',
-        query_params = {'filter':'commentCard'}
+            uri_path = self.base_uri+'/actions',
+            query_params = {'filter':'commentCard'}
         )
     
     def getChecklists(self):
         return self.fetchJson( 
-        uri_path = self.base_uri+'/idChecklists',
-        query_params = {}
+            uri_path = self.base_uri+'/idChecklists',
+            query_params = {}
         )
 
     def getAttachments(self):
         return self.fetchJson( 
-        uri_path = self.base_uri+'/attachments',
-        query_params = {}
+            uri_path = self.base_uri+'/attachments',
+            query_params = {}
         )
 
     def getMembers(self):
         response = self.fetchJson( 
         uri_path = self.base_uri,
-        query_params = {'members' : 'true', 'limit' : 300}
+            query_params = {'members' : 'true', 'limit' : 300}
         )
         return response['members']
 
-    #Don't work api
-    #def getIdMemberCreator(self):
-    #    return self.fetchJson( 
-    #    uri_path = self.base_uri,
-    #    query_params = {'action_fields' : 'idMemberCreator'}
-    #    )
-
-    #get only for card with few action
-    #@TODO tofix
-    def getIdMemberCreator(self, listActions, cardId):
-        for l in listActions:
-            if l['data']['card']['id'] == cardId and l['type'] == 'createCard':
-                return l['idMemberCreator']
+    def getCreateCard(self):
+        response =  self.fetchJson( 
+            uri_path = self.base_uri,
+            query_params = {'actions' : 'createCard'}
+        )
+        return response
 
 
 class TrelloChecklist(Checklist):
