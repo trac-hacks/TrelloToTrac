@@ -12,11 +12,11 @@ Ticktes are associated with a release and a iteretion (AgileTrac).
 
 Add to trac.ini 
 
-[trello]  
-api_key = ***  
-user_auth_token = ***  
-board_id = ***  
-consumer_key = ***  
-consumer_secret = ***  
-board_id = ***  
-list_id = ***  
+    [trello]  
+    api_key = ***  
+    user_auth_token = ***  
+    board_id = ***  
+    consumer_key = ***  
+    consumer_secret = ***  
+    board_id = ***  
+    list_id = ***  
