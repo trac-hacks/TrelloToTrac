@@ -1,4 +1,4 @@
-tracchello
+TrelloToTrac
 ==========
 
 Trac Plugin for Trello Integration
