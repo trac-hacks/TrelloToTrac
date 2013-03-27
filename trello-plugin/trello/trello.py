@@ -33,7 +33,6 @@ class TracTrelloPlugin(Component):
     
     # IRequestHandler methods
     def match_request(self, req):
-        #self.log.debug("REQ %s" % repr(req))
         if 'TRAC_ADMIN' in req.perm:
             match = re.match(r'/trello(?:/(.+))?$', req.path_info)
             if match:
@@ -72,7 +71,6 @@ class TracTrelloPlugin(Component):
             }[x]
 
     def indexController(self, req):
-        self.log.debug("START INDEX CONTROLLER")
         #start db
         db = self.env.get_db_cnx()
         cursor = db.cursor()
@@ -92,7 +90,6 @@ class TracTrelloPlugin(Component):
 
         boardInformation = board.getBoardInformation()
         listInformation = theList.getListInformation()
-        listActions = theList.getActions()
         
         if req.method == 'POST':
             error_msg = None
@@ -130,18 +127,20 @@ class TracTrelloPlugin(Component):
                 for c in cards:
                     cardContent = {}
                     cardInformation = c.getCardInformation()            
-                    self.log.debug("CARD %s" % repr(cardInformation))
 
                     #Content
                     cardContent['id'] = cardInformation['id']
                     cardContent['name'] = cardInformation['name']
                     cardContent['url'] = cardInformation['url']
+                    
+                    cardId = cardInformation['id']
+                    card = trelloclient.TrelloCard(trello, cardId)
+                    createCard = card.getCreateCard()
+
                     #date
-                    #@TODO not get date for card
-                    #dt = parser.parse(cardInformation['date'])
-                    #cardContent['timestamp'] = int(time.mktime(dt.timetuple()))
-                    now = datetime.now()
-                    cardContent['timestamp'] = int(time.mktime(now.timetuple()))
+                    dt = parser.parse(createCard['actions'][0]['date'])
+                    cardContent['timestamp'] = int(time.mktime(dt.timetuple())-time.timezone)
+                    
 
                     #add link to card
                     cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
@@ -149,10 +148,7 @@ class TracTrelloPlugin(Component):
                     m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
                     cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + '[[br]] \n'
                     
-                    cardId = cardInformation['id']
-                    card = trelloclient.TrelloCard(trello, cardId)
-                    idMemberCreator = card.getIdMemberCreator(listActions, cardId)
-                    self.log.debug("CREATOR %s" % repr(idMemberCreator))
+                    idMemberCreator = createCard['actions'][0]['idMemberCreator']
                     reporter = self.getUserByTrelloId(idMemberCreator)
                     if reporter is None:
                         reporter = 'trello'
@@ -283,7 +279,7 @@ class TracTrelloPlugin(Component):
         cursor = db.cursor()
         for c in comments:
             dtComment = parser.parse(c['date'])
-            timestamp = int(time.mktime(dtComment.timetuple()))+3600
+            timestamp = int(time.mktime(dtComment.timetuple())-time.timezone)
             userComment = self.getUserByTrelloId(c['idMemberCreator'])
             m2w = markdowntowiki.MarkdownToWiki(c['data']['text']).convert()
             cursor.execute("INSERT INTO ticket_change VALUES ((%s),(%s),(%s),(%s),(%s),(%s))",[idTicket,timestamp,userComment,'comment', '', m2w])
