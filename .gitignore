@@ -34,6 +34,8 @@ nosetests.xml
 .project
 .pydevproject
 
+config.ini
+
 trello-plugin/build/*
 trello-plugin/dist/*
 trello-plugin/task/trac.dump

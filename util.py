@@ -3,7 +3,7 @@ import configparser
 import oauth2 as oauth
 
 config = configparser.ConfigParser()
-config.read('trachello/config/config.ini')
+config.read('config.ini')
 consumer_key = config.get('trello', 'consumer_key') 
 consumer_secret = config.get('trello', 'consumer_secret') 
 
