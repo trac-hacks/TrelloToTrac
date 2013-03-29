@@ -10,17 +10,38 @@ Ticktes are associated with a release and a iteretion (AgileTrac).
     $ sudo pip install trolly  
 
 
-Add to trac.ini 
+### Get oauth token
+    sudo pip install httplib2  
+    sudo pip install oauth2
+    sudo pip install configparser  
+    
+set config.ini  with this content
+https://trello.com/1/appKey/generate  
+    
+    #config.ini
+    [trello]  
+    consumer_key = **
+    consumer_secret = **  
+    
+    #run 
+    python util.py
+
+Set oauth_token result in trac.ini
+
+    user_auth_token = **
+
+Add to trac.ini consumer_key as
+    
+    api_key = ***
+    
+    
+Final trac.ini 
 
     [trello]  
     api_key = ***  
     user_auth_token = ***  
     board_id = ***  
-    consumer_key = ***  
-    consumer_secret = ***  
-    board_id = ***  
     list_id = ***  
     
     [trello-user]
-    5****f = magni  
-
+    5****f = magni 
