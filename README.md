@@ -20,3 +20,7 @@ Add to trac.ini
     consumer_secret = ***  
     board_id = ***  
     list_id = ***  
+    
+    [trello-user]
+    5****f = magni  
+
