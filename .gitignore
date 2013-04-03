@@ -37,6 +37,6 @@ nosetests.xml
 config.ini
 *.dump
 
-trello-plugin/build/*
-trello-plugin/dist/*
-task
+*/trello-plugin/build/*
+*/trello-plugin/dist/*
+*/trello-plugin/task/*
