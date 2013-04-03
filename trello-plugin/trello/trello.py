@@ -18,7 +18,7 @@ from trac.util.datefmt import parse_date, utc, to_timestamp, to_datetime, \
 import trelloclient
 import markdowntowiki
 
-class TrelloToTracPlugin(Component):
+class TracTrelloPlugin(Component):
 
     implements(INavigationContributor, IRequestHandler, ITemplateProvider)
     
@@ -102,7 +102,7 @@ class TrelloToTracPlugin(Component):
             for field in ('milestone', 'iteration'):
                 value = req.args.get(field).strip()
                 if len(value) == 0:
-                    error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
+                    error_msg = 'You must fill in the field "' + TracTrelloPlugin.__FIELD_NAMES[field] + '".'
                     break
                 #validate milestone exist                
                 if field == 'milestone':           
@@ -231,7 +231,7 @@ class TrelloToTracPlugin(Component):
             for field in ('card', 'milestone', 'iteration'):
                 value = req.args.get(field).strip()
                 if len(value) == 0:
-                    error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
+                    error_msg = 'You must fill in the field "' + TracTrelloPlugin.__FIELD_NAMES[field] + '".'
                     break
                 #validate cardid exist                
                 if field == 'card':           
@@ -370,6 +370,8 @@ class TrelloToTracPlugin(Component):
             return {'res':True}
 
     def validateCardId(self, cardId, trello):
+        #@TODO
+        # validate card exist in Trello
         result = trello.cardExist(cardId)
         if result:
             return {'res':True}
@@ -416,9 +418,9 @@ class TrelloToTracPlugin(Component):
             desc += '[[br]] \n\'\'\'Label:\'\'\' [[br]]\n'
             for l in labels:
                 if l['name'] == '':
-                    desc += '\'\'' + l['color'] + '\'\' [[br]]\n'
+                    desc += '\'\'' + 'None'  + '\'\' [[br]]\n'
                 else:
-                    desc += '\'\'' + l['color'] + ': ' + l['name'] + '\'\' [[br]]\n'
+                    desc += '\'\'' + l['name'] + '\'\' [[br]]\n'
         return desc
 
     def addCommentsToTicket(self, comments, idTicket):
