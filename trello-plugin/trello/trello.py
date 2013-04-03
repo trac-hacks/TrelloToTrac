@@ -1,3 +1,7 @@
+'''
+@author: matteo@magni.me
+'''
+
 import re
 from genshi.builder import tag
 from trac.core import *
@@ -20,6 +24,7 @@ class TracTrelloPlugin(Component):
     
     __FIELD_NAMES = { 'milestone' : 'Milestone',
                       'iteration' : 'Iteration',
+                      'card' : 'Card Id',
                     }
 
     # INavigationContributor methods
@@ -67,6 +72,7 @@ class TracTrelloPlugin(Component):
 
     def controller(self, x):
         return {
+            'single': self.singleController,
             None: self.indexController,
             }[x]
 
@@ -193,7 +199,7 @@ class TracTrelloPlugin(Component):
                         add_warning(req, error_msg)
                         data = req.args
     
-        #forever view date
+        #forever view data
         data['board_id'] = boardId
         data['list_id'] = listId
         data['board_name'] = boardInformation['name']
@@ -205,6 +211,137 @@ class TracTrelloPlugin(Component):
         # This tuple is for Genshi (template_name, data, content_type)
         # Without data the trac layout will not appear.
         return 'trello.html', data, None
+
+    def singleController(self, req):
+        #start db
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+
+        data = {}
+        
+        #get trello conf
+        apiKey = self.config.get('trello', 'api_key') 
+        userAuthToken = self.config.get('trello', 'user_auth_token') 
+
+        #start trello 
+        trello = trelloclient.TrelloClient(apiKey,userAuthToken)
+        
+        if req.method == 'POST':
+            error_msg = None
+            for field in ('card', 'milestone', 'iteration'):
+                value = req.args.get(field).strip()
+                if len(value) == 0:
+                    error_msg = 'You must fill in the field "' + TracTrelloPlugin.__FIELD_NAMES[field] + '".'
+                    break
+                #validate cardid exist                
+                if field == 'card':           
+                    result = self.validateCardId(value, trello)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        cardId = value
+                #validate milestone exist                
+                if field == 'milestone':           
+                    result = self.validateMilestone(value)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        milestone = value
+                #validate iteration exist
+                if field == 'iteration':           
+                    result = self.validateIteration(value)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        iteration = value
+                    break
+            if error_msg:
+                add_warning(req, error_msg)
+                data = req.args
+            else:
+                #general ticket data
+                owner = ''
+                version = ''
+            
+                card = trelloclient.TrelloCard(trello, cardId)
+
+                cardContent = {}
+                cardInformation = card.getCardInformation()            
+
+                #Content
+                cardContent['id'] = cardInformation['id']
+                cardContent['name'] = cardInformation['name']
+                cardContent['url'] = cardInformation['url']
+                    
+                createCard = card.getCreateCard()
+
+                #date
+                dt = parser.parse(createCard['actions'][0]['date'])
+                cardContent['timestamp'] = int(time.mktime(dt.timetuple())-time.timezone)
+                    
+                #add link to card
+                cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
+                #covert desc markdown to trac wiki
+                m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
+                cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + '[[br]] \n'
+                    
+                idMemberCreator = createCard['actions'][0]['idMemberCreator']
+                reporter = self.getUserByTrelloId(idMemberCreator)
+                if reporter is None:
+                    reporter = 'trello'
+                members=card.getMembers()
+                    
+                #cc alla assigned member
+                cc = self.addMembersToCc(members)
+
+                #checklist
+                checklists = card.getChecklists()
+                cardContent['desc'] = self.addChecklistsToDesc(checklists, cardContent['desc'], trello)
+
+                #import attachments
+                attachments = card.getAttachments()
+                cardContent['desc'] = self.addAttachmentsToDesc(attachments, cardContent['desc'])
+
+                #labels
+                labels = cardInformation['labels']
+                cardContent['desc'] = self.addLabelsToDesc(labels, cardContent['desc'])
+
+                #insert card in ticket
+                try:
+                    #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
+                    cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', cardContent['timestamp'], cardContent['timestamp'], '', '', '', owner, reporter, cc, version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
+                    idTicket = cursor.fetchone()[0]
+                    #comment
+                    comments = card.getComments()
+                    self.addCommentsToTicket(comments, idTicket)
+
+                    #add ticket to iteration
+                    self.addTicketToIteration(idTicket,iteration)
+
+                except:
+                    db.rollback()
+                    raise
+                db.commit()
+
+                notice_msg='Inserita la card %s' % (cardContent['name']);
+                add_notice(req, notice_msg)
+
+                if error_msg:
+                    add_warning(req, error_msg)
+                    data = req.args
+    
+        #forever view data
+        data['card_placeholder'] = 'card id'
+        data['milestone_placeholder'] = 'milestone name'
+        data['iteration_placeholder'] = 'iteration number'
+        add_stylesheet(req, 'trello/css/trello.css')
+
+        # This tuple is for Genshi (template_name, data, content_type)
+        # Without data the trac layout will not appear.
+        return 'single.html', data, None
 
     def validateMilestone(self, milestone):
         db = self.env.get_db_cnx()
@@ -231,6 +368,15 @@ class TracTrelloPlugin(Component):
             return {'res':False, 'msg':'Iteration is not exist.'}
         else:
             return {'res':True}
+
+    def validateCardId(self, cardId, trello):
+        #@TODO
+        # validate card exist in Trello
+        result = trello.cardExist(cardId)
+        if result:
+            return {'res':True}
+        else:
+            return {'res':False, 'msg':'Card is not exist.'}
 
     def addTicketToIteration(self, idTicket, idIteration):
         db = self.env.get_db_cnx()
@@ -271,7 +417,10 @@ class TracTrelloPlugin(Component):
         if len(labels):
             desc += '[[br]] \n\'\'\'Label:\'\'\' [[br]]\n'
             for l in labels:
-                desc += '\'\'' + l['name'] + '\'\' [[br]]\n'
+                if l['name'] == '':
+                    desc += '\'\'' + 'None'  + '\'\' [[br]]\n'
+                else:
+                    desc += '\'\'' + l['name'] + '\'\' [[br]]\n'
         return desc
 
     def addCommentsToTicket(self, comments, idTicket):

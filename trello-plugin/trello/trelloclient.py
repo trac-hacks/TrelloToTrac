@@ -1,3 +1,7 @@
+'''
+@author: matteo@magni.me
+'''
+
 from trolly.client import Client
 from trolly.organisation import Organisation
 from trolly.board import Board
@@ -7,10 +11,26 @@ from trolly.checklist import Checklist
 from trolly.member import Member
 from trolly import ResourceUnavailable
 
+import urllib2
+
 class TrelloClient(Client):
     def __init__(self, apiKey, userAuthToken):
         Client.__init__(self, apiKey, userAuthToken )
         #super(TrelloClient, self).__init__( apiKey, userAuthToken )
+    
+    def cardExist(self, cardId):
+        try:
+            query_params = {}
+            query_params = self.addAuthorisation(query_params)
+            uri_path = '/cards/' + cardId
+            uri = self.buildUri( uri_path, query_params )
+            fileHandle = urllib2.urlopen(uri)
+            data = fileHandle.read()
+            fileHandle.close()
+            return True
+        except urllib2.URLError, e:
+            return False
+            
 
 class TrelloBoard(Board):
     def __init__(self, trelloClient, boardId):
@@ -64,8 +84,7 @@ class TrelloCard(Card):
             query_params = {'actions' : 'createCard'}
         )
         return response
-
-
+    
 class TrelloChecklist(Checklist):
     def __init__(self, trelloClient, checklistId):
         Checklist.__init__(self, trelloClient, checklistId )
