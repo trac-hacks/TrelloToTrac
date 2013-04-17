@@ -35,8 +35,8 @@ nosetests.xml
 .pydevproject
 
 config.ini
+*.dump
 
-trello-plugin/build/*
-trello-plugin/dist/*
-trello-plugin/task/trac.dump
-trello-plugin/task/resetsvn.sh
+*/trello-plugin/build/*
+*/trello-plugin/dist/*
+*/trello-plugin/task/*
