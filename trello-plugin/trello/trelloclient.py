@@ -1,7 +1,7 @@
 '''
 @author: matteo@magni.me
 '''
-
+import json
 from trolly.client import Client
 from trolly.organisation import Organisation
 from trolly.board import Board
@@ -27,15 +27,61 @@ class TrelloClient(Client):
             fileHandle = urllib2.urlopen(uri)
             data = fileHandle.read()
             fileHandle.close()
-            return True
+            return {'res':True}
         except urllib2.URLError, e:
-            return False
-            
+            return {'res':False}
+           
+    def cardShortIdExist(self, cardShortId, boardId):
+        try:
+            query_params = {}
+            query_params = self.addAuthorisation(query_params)
+            uri_path = '/boards/' + boardId + '/cards/' + cardShortId
+            uri = self.buildUri( uri_path, query_params )
+            fileHandle = urllib2.urlopen(uri)
+            data = fileHandle.read()
+            fileHandle.close()
+            data = json.loads( data )  
+            return {'res':True,'id':data['id']}
+        except urllib2.URLError, e:
+            return {'res':False}
+
+    def boardExist(self, boardId):
+        try:
+            query_params = {}
+            query_params = self.addAuthorisation(query_params)
+            uri_path = '/boards/' + boardId
+            uri = self.buildUri( uri_path, query_params )
+            fileHandle = urllib2.urlopen(uri)
+            data = fileHandle.read()
+            fileHandle.close()
+            return {'res':True}
+        except urllib2.URLError, e:
+            return {'res':False}
+
+    def listExist(self, listId):
+        try:
+            query_params = {}
+            query_params = self.addAuthorisation(query_params)
+            uri_path = '/lists/' + listId
+            uri = self.buildUri( uri_path, query_params )
+            fileHandle = urllib2.urlopen(uri)
+            data = fileHandle.read()
+            fileHandle.close()
+            data = json.loads( data )  
+            return {'res':True, 'boardId':data['idBoard']}
+        except urllib2.URLError, e:
+            return {'res':False}
 
 class TrelloBoard(Board):
     def __init__(self, trelloClient, boardId):
         Board.__init__(self, trelloClient, boardId )
         #super(TrelloBoard, self).__init__( trelloClient, boardId )
+    def getCardByShortId(self, shortId):
+        return self.fetchJson( 
+            uri_path = self.base_uri+'/cards/'+shortId,
+            query_params = {}
+        )
+
 
 class TrelloList(List):
     def __init__(self, trelloClient, listId):

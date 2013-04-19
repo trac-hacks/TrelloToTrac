@@ -22,12 +22,19 @@ class TrelloToTracPlugin(Component):
 
     implements(INavigationContributor, IRequestHandler, ITemplateProvider)
     
-    __FIELD_NAMES = { 'milestone' : 'Milestone',
+    __FIELD_NAMES = { 
+                      'board' : 'Board',
+                      'thelist' : 'List',
+                      'milestone' : 'Milestone',
                       'iteration' : 'Iteration',
-                      'card' : 'Card Id',
+                      'card' : 'Card Number',
                     }
+    __FIELD_AGILE = ['board', 'thelist', 'milestone', 'iteration']   
+    __FIELD = ['board', 'thelist', 'milestone']
+    __FIELD_AGILE_SINGLE = ['board', 'card', 'milestone', 'iteration']   
+    __FIELD_SINGLE = ['board', 'card', 'milestone']
 
-    # INavigationContributor methods
+   # INavigationContributor methods
     def get_active_navigation_item(self, req):
         return 'Trello'
     
@@ -82,28 +89,52 @@ class TrelloToTracPlugin(Component):
         cursor = db.cursor()
 
         data = {}
+        boardId = ''
+        listId = ''
         
         #get trello conf
         apiKey = self.config.get('trello', 'api_key') 
         userAuthToken = self.config.get('trello', 'user_auth_token') 
-        boardId = self.config.get('trello', 'board_id') 
-        listId = self.config.get('trello', 'list_id') 
+        boardList = self.config.getlist('trello', 'boards')
+        listList = self.config.getlist('trello', 'lists')
+        
+        agileTrac = self.config.getbool('trello', 'agile_trac') 
+        if agileTrac:
+            field_list = TrelloToTracPlugin.__FIELD_AGILE
+        else:
+            field_list = TrelloToTracPlugin.__FIELD
 
         #start trello 
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
-        board = trelloclient.TrelloBoard(trello, boardId)
-        theList = trelloclient.TrelloList(trello, listId)
 
-        boardInformation = board.getBoardInformation()
-        listInformation = theList.getListInformation()
+        #get board,list,milestone lists
+        boards = self.getBoardList(boardList, trello)
+        lists = self.getListList(listList, trello)
+        milestones = self.getActiveMilestone()
         
         if req.method == 'POST':
             error_msg = None
-            for field in ('milestone', 'iteration'):
+            for field in field_list:
                 value = req.args.get(field).strip()
                 if len(value) == 0:
                     error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
                     break
+                #validate board exist
+                if field == 'board':           
+                    result = self.validateBoardId(value, trello)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        boardId = value
+                #validate list exist
+                if field == 'thelist':           
+                    result = self.validateListId(value, trello)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        listId = value
                 #validate milestone exist                
                 if field == 'milestone':           
                     result = self.validateMilestone(value)
@@ -128,7 +159,19 @@ class TrelloToTracPlugin(Component):
                 #general ticket data
                 owner = ''
                 version = ''
+                severity = 'normale'
+                status = 'new'
+                resolution = ''
+                priority = 'normale'
+                keywords = ''
+                component = ''
+                task = 'task'
                 
+                board = trelloclient.TrelloBoard(trello, boardId)
+                theList = trelloclient.TrelloList(trello, listId)
+                boardInformation = board.getBoardInformation()
+                listInformation = theList.getListInformation()
+
                 cards = theList.getCards()
                 for c in cards:
                     cardContent = {}
@@ -178,14 +221,15 @@ class TrelloToTracPlugin(Component):
                     #insert card in ticket
                     try:
                         #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
-                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', cardContent['timestamp'], cardContent['timestamp'], '', '', '', owner, reporter, cc, version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
+                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ task, cardContent['timestamp'], cardContent['timestamp'], component , severity, priority, owner, reporter, cc, version, milestone, status, resolution, cardContent['name'], cardContent['desc'], keywords ])
                         idTicket = cursor.fetchone()[0]
                         #comment
                         comments = card.getComments()
                         self.addCommentsToTicket(comments, idTicket)
 
                         #add ticket to iteration
-                        self.addTicketToIteration(idTicket,iteration)
+                        if agileTrac:
+                            self.addTicketToIteration(idTicket,iteration)
 
                     except:
                         db.rollback()
@@ -198,14 +242,14 @@ class TrelloToTracPlugin(Component):
                     if error_msg:
                         add_warning(req, error_msg)
                         data = req.args
-    
+        
         #forever view data
-        data['board_id'] = boardId
-        data['list_id'] = listId
-        data['board_name'] = boardInformation['name']
-        data['list_name'] = listInformation['name']
         data['milestone_placeholder'] = 'milestone name'
         data['iteration_placeholder'] = 'iteration number'
+        data['agile_trac'] = agileTrac
+        data['boards'] = boards
+        data['lists'] = lists
+        data['milestones'] = milestones
         add_stylesheet(req, 'trello/css/trello.css')
 
         # This tuple is for Genshi (template_name, data, content_type)
@@ -218,29 +262,50 @@ class TrelloToTracPlugin(Component):
         cursor = db.cursor()
 
         data = {}
-        
+        boardId = ''
+        cardId = ''
+
         #get trello conf
         apiKey = self.config.get('trello', 'api_key') 
         userAuthToken = self.config.get('trello', 'user_auth_token') 
+        boardList = self.config.getlist('trello', 'boards')
+        
+        agileTrac = self.config.getbool('trello', 'agile_trac') 
+        if agileTrac:
+            field_list = TrelloToTracPlugin.__FIELD_AGILE_SINGLE
+        else:
+            field_list = TrelloToTracPlugin.__FIELD_SINGLE
 
         #start trello 
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
         
+        #get list of boards
+        boards = self.getBoardList(boardList, trello)
+        milestones = self.getActiveMilestone()
+
         if req.method == 'POST':
             error_msg = None
-            for field in ('card', 'milestone', 'iteration'):
+            for field in field_list:
                 value = req.args.get(field).strip()
                 if len(value) == 0:
                     error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
                     break
-                #validate cardid exist                
-                if field == 'card':           
-                    result = self.validateCardId(value, trello)
+                #validate board exist
+                if field == 'board':           
+                    result = self.validateBoardId(value, trello)
                     if not result['res']:
                         error_msg = result['msg']
                         break
                     else:
-                        cardId = value
+                        boardId = value
+                #validate cardid exist                
+                if field == 'card':           
+                    result = self.validateCardShortId(value, boardId, trello)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        cardId = result['id']
                 #validate milestone exist                
                 if field == 'milestone':           
                     result = self.validateMilestone(value)
@@ -265,9 +330,18 @@ class TrelloToTracPlugin(Component):
                 #general ticket data
                 owner = ''
                 version = ''
-            
-                card = trelloclient.TrelloCard(trello, cardId)
+                severity = 'normale'
+                status = 'new'
+                resolution = ''
+                priority = 'normale'
+                keywords = ''
+                component = ''
+                task = 'task'
 
+                #get board and card info
+                board = trelloclient.TrelloBoard(trello, boardId)
+                card = trelloclient.TrelloCard(trello,cardId)
+                
                 cardContent = {}
                 cardInformation = card.getCardInformation()            
 
@@ -312,14 +386,15 @@ class TrelloToTracPlugin(Component):
                 #insert card in ticket
                 try:
                     #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
-                    cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ 'task', cardContent['timestamp'], cardContent['timestamp'], '', '', '', owner, reporter, cc, version, milestone, '', '', cardContent['name'], cardContent['desc'], '' ])
+                    cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ task, cardContent['timestamp'], cardContent['timestamp'], component , severity, priority, owner, reporter, cc, version, milestone, status, resolution, cardContent['name'], cardContent['desc'], keywords ])
                     idTicket = cursor.fetchone()[0]
                     #comment
                     comments = card.getComments()
                     self.addCommentsToTicket(comments, idTicket)
 
                     #add ticket to iteration
-                    self.addTicketToIteration(idTicket,iteration)
+                    if agileTrac:
+                        self.addTicketToIteration(idTicket,iteration)
 
                 except:
                     db.rollback()
@@ -332,11 +407,14 @@ class TrelloToTracPlugin(Component):
                 if error_msg:
                     add_warning(req, error_msg)
                     data = req.args
-    
+                
         #forever view data
-        data['card_placeholder'] = 'card id'
+        data['card_placeholder'] = 'card short id'
         data['milestone_placeholder'] = 'milestone name'
         data['iteration_placeholder'] = 'iteration number'
+        data['agile_trac'] = agileTrac
+        data['boards'] = boards
+        data['milestones'] = milestones
         add_stylesheet(req, 'trello/css/trello.css')
 
         # This tuple is for Genshi (template_name, data, content_type)
@@ -371,11 +449,35 @@ class TrelloToTracPlugin(Component):
 
     def validateCardId(self, cardId, trello):
         result = trello.cardExist(cardId)
-        if result:
+        if result['res']:
             return {'res':True}
         else:
             return {'res':False, 'msg':'Card is not exist.'}
 
+    #validate cardShortId in board
+    def validateCardShortId(self, shortId, boardId, trello):
+        result = trello.cardShortIdExist(shortId,boardId)
+        if result['res']:
+            return {'res':True, 'id':result['id']}
+        else:
+            return {'res':False, 'msg':'Card is not exist.'}
+    
+    #validate boardId
+    def validateBoardId(self, boardId, trello):
+        result = trello.boardExist(boardId)
+        if result['res']:
+            return {'res':True}
+        else:
+            return {'res':False, 'msg':'Board is not exist.'}
+
+    #validate listId
+    def validateListId(self, listId, trello):
+        result = trello.listExist(listId)
+        if result['res']:
+            return {'res':True, 'boardId': result['boardId']}
+        else:
+            return {'res':False, 'msg':'List is not exist.'}
+    
     def addTicketToIteration(self, idTicket, idIteration):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
@@ -383,7 +485,7 @@ class TrelloToTracPlugin(Component):
 
     def addMembersToCc(self, members):
         cc=''
-        count = 0
+        count = 1
         l = len(members)
         for m in members:
             tracUser = self.getUserByTrelloId(m['id'])
@@ -430,3 +532,32 @@ class TrelloToTracPlugin(Component):
             userComment = self.getUserByTrelloId(c['idMemberCreator'])
             m2w = markdowntowiki.MarkdownToWiki(c['data']['text']).convert()
             cursor.execute("INSERT INTO ticket_change VALUES ((%s),(%s),(%s),(%s),(%s),(%s))",[idTicket,timestamp,userComment,'comment', '', m2w])
+
+
+    def getBoardList(self, boardList, trello):
+        boards = []
+        for bId in boardList:
+            b = trelloclient.TrelloBoard(trello, bId).getBoardInformation()
+            board = {}
+            board['id'] = b['id']
+            board['name'] = b['name']
+            boards.append(board)
+        return boards
+    
+    def getListList(self, listList, trello):
+        lists = []
+        for lId in listList:
+            l = trelloclient.TrelloList(trello, lId).getListInformation()
+            lis = {}
+            lis['id'] = l['id']
+            lis['name'] = l['name']
+            lists.append(lis)
+        return lists
+
+    def getActiveMilestone(self): 
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        sql = "SELECT name FROM milestone WHERE completed = 0 ORDER BY name ASC"
+        cursor.execute(sql)
+        milestones = cursor.fetchall()
+        return milestones
