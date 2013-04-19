@@ -43,8 +43,9 @@ Final trac.ini
     [trello]  
     api_key = ***  
     user_auth_token = ***  
-    board_id = ***  
-    list_id = ***  
+    boards = ***  [boards comma separated]
+    lists = ***  [lists comma separeted]
+    agile_trac = false/true
     
     [trello-user]
     5****f = magni 
