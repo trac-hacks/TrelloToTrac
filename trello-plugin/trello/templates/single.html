@@ -17,20 +17,28 @@
        <h1>Trello</h1>
        <xi:include href="trello_menu.html" /> 
        <div id="tabcontent">
-         <h2>Import card</h2>
-
-        <form class="mod" id="trello" method="post" action="">
+        <h2>Import card</h2>
+          <form class="mod" id="trello" method="post" action="">
             <div class="field">
-                <label>Card id (required):<br />
-                        <input type="text" name="card" value="${card_id}" placeholder="${card_placeholder}" />
+                <label>Board (required):<br />
+                    <select name="board">
+                        <option py:for="board in boards" value="${board.id}">${board.name}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="field">
+                <label>Card short id (required):<br />
+                        <input type="text" name="card" value="${card}" placeholder="${card_placeholder}" />
                 </label>
             </div>
             <div class="field">
                 <label>Milestone (required):<br />
-                        <input type="text" name="milestone" value="${milestone}" placeholder="${milestone_placeholder}" />
+                    <select name="milestone">
+                        <option py:for="m in milestones" value="${m}">${m}</option>
+                    </select>
                 </label>
             </div>
-            <div class="field">
+            <div py:if="agile_trac" class="field">
                 <label>Iteration (required):<br />
                         <input type="text" name="iteration" value="${iteration}" placeholder="${iteration_placeholder}" />
                 </label>
