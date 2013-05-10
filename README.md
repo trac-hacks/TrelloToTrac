@@ -38,9 +38,11 @@ Add to trac.ini agiletrac if agiletracplugin is active as
     
     agile_trac = false/true
     
-Add to trac.ini estimationtools if estimationtools is active as
+Add to trac.ini estimationtools if estimationtools is active as  
+
     estimationtools = false/true
-    
+You can insert estimationtools field value with this format in card name.
+(VALUE) nameofcard
     
 Final trac.ini 
 
