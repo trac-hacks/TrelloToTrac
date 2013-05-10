@@ -195,7 +195,7 @@ class TrelloToTracPlugin(Component):
                     cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
                     #covert desc markdown to trac wiki
                     m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
-                    cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + '[[br]] \n'
+                    cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + ' [[br]] \n'
                     
                     idMemberCreator = createCard['actions'][0]['idMemberCreator']
                     reporter = self.getUserByTrelloId(idMemberCreator)
@@ -360,7 +360,7 @@ class TrelloToTracPlugin(Component):
                 cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
                 #covert desc markdown to trac wiki
                 m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
-                cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + '[[br]] \n'
+                cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + ' [[br]] \n'
                     
                 idMemberCreator = createCard['actions'][0]['idMemberCreator']
                 reporter = self.getUserByTrelloId(idMemberCreator)
