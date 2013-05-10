@@ -15,6 +15,6 @@ class MarkdownToWiki():
         #italics
         text = re.sub(r'_(.*?)_',r"''\1''", text)
         #make BR
-        text = re.sub(r"\n",r"[[br]]", text)
+        text = re.sub(r"\n",r" [[br]]", text)
         self.text = text
         return self.text
