@@ -104,6 +104,8 @@ class TrelloToTracPlugin(Component):
         else:
             field_list = TrelloToTracPlugin.__FIELD
 
+        estimationTools = self.config.getbool('trello', 'estimationtools') 
+
         #start trello 
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
 
@@ -182,6 +184,12 @@ class TrelloToTracPlugin(Component):
                     cardContent['name'] = cardInformation['name']
                     cardContent['url'] = cardInformation['url']
                     
+                    #size and name/title
+                    if estimationTools:
+                        resultSize = self.getSizeByName(cardInformation['name'])
+                        size = resultSize['size']
+                        cardContent['name'] = resultSize['name']
+                    
                     cardId = cardInformation['id']
                     card = trelloclient.TrelloCard(trello, cardId)
                     createCard = card.getCreateCard()
@@ -230,6 +238,11 @@ class TrelloToTracPlugin(Component):
                         #add ticket to iteration
                         if agileTrac:
                             self.addTicketToIteration(idTicket,iteration)
+            
+                        #add size
+                        if estimationTools:
+                            estimationToolsField = self.config.get('estimation-tools', 'estimation_field')
+                            self.addSizeToTicket(size, estimationToolsField, idTicket, cardContent['timestamp'], reporter)
 
                     except:
                         db.rollback()
@@ -275,6 +288,8 @@ class TrelloToTracPlugin(Component):
             field_list = TrelloToTracPlugin.__FIELD_AGILE_SINGLE
         else:
             field_list = TrelloToTracPlugin.__FIELD_SINGLE
+
+        estimationTools = self.config.getbool('trello', 'estimationtools') 
 
         #start trello 
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
@@ -349,7 +364,13 @@ class TrelloToTracPlugin(Component):
                 cardContent['id'] = cardInformation['id']
                 cardContent['name'] = cardInformation['name']
                 cardContent['url'] = cardInformation['url']
-                    
+                
+                #size and name/title
+                if estimationTools:
+                    resultSize = self.getSizeByName(cardInformation['name'])
+                    size = resultSize['size']
+                    cardContent['name'] = resultSize['name']
+
                 createCard = card.getCreateCard()
 
                 #date
@@ -395,6 +416,10 @@ class TrelloToTracPlugin(Component):
                     #add ticket to iteration
                     if agileTrac:
                         self.addTicketToIteration(idTicket,iteration)
+                    #add size
+                    if estimationTools:
+                        estimationToolsField = self.config.get('estimation-tools', 'estimation_field')
+                        self.addSizeToTicket(size, estimationToolsField, idTicket, cardContent['timestamp'], reporter)
 
                 except:
                     db.rollback()
@@ -532,6 +557,22 @@ class TrelloToTracPlugin(Component):
             userComment = self.getUserByTrelloId(c['idMemberCreator'])
             m2w = markdowntowiki.MarkdownToWiki(c['data']['text']).convert()
             cursor.execute("INSERT INTO ticket_change VALUES ((%s),(%s),(%s),(%s),(%s),(%s))",[idTicket,timestamp,userComment,'comment', '', m2w])
+
+    def addSizeToTicket(self, size, estimationToolsField, idTicket, timestamp, creator):
+        if size is not None:
+            db = self.env.get_db_cnx()
+            cursor = db.cursor()
+            cursor.execute("INSERT INTO ticket_custom VALUES ((%s),(%s),(%s))",[idTicket,estimationToolsField,size])
+            #if you want to have history
+            #cursor.execute("INSERT INTO ticket_change VALUES ((%s),(%s),(%s),(%s),(%s),(%s))",[idTicket,timestamp,creator,estimationToolsField, '',size])
+
+    def getSizeByName(self, name):
+        if re.search(r"^\((\d+)\) ", name):
+            size = re.search(r"^\((\d+)\) ", name).group(1)
+            name = re.sub(r"^\((\d+)\) ", '', name)
+            return {'name':name, 'size': size}
+        else:
+            return {'name':name, 'size': None}
 
 
     def getBoardList(self, boardList, trello):
