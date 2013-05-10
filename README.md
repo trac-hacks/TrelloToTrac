@@ -38,6 +38,10 @@ Add to trac.ini agiletrac if agiletracplugin is active as
     
     agile_trac = false/true
     
+Add to trac.ini estimationtools if estimationtools is active as
+    estimationtools = false/true
+    
+    
 Final trac.ini 
 
     [trello]  
@@ -46,6 +50,7 @@ Final trac.ini
     boards = ***  [boards comma separated]
     lists = ***  [lists comma separeted]
     agile_trac = false/true
+    estimationtools = false/true
     
     [trello-user]
     5****f = magni 
