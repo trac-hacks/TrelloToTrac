@@ -21,35 +21,35 @@ import markdowntowiki
 class TrelloToTracPlugin(Component):
 
     implements(INavigationContributor, IRequestHandler, ITemplateProvider)
-    
-    __FIELD_NAMES = { 
+
+    __FIELD_NAMES = {
                       'board' : 'Board',
                       'thelist' : 'List',
                       'milestone' : 'Milestone',
                       'iteration' : 'Iteration',
                       'card' : 'Card Number',
                     }
-    __FIELD_AGILE = ['board', 'thelist', 'milestone', 'iteration']   
+    __FIELD_AGILE = ['board', 'thelist', 'milestone', 'iteration']
     __FIELD = ['board', 'thelist', 'milestone']
-    __FIELD_AGILE_SINGLE = ['board', 'card', 'milestone', 'iteration']   
+    __FIELD_AGILE_SINGLE = ['board', 'card', 'milestone', 'iteration']
     __FIELD_SINGLE = ['board', 'card', 'milestone']
 
    # INavigationContributor methods
     def get_active_navigation_item(self, req):
         return 'Trello'
-    
+
     def get_navigation_items(self, req):
-        if 'TRAC_ADMIN' in req.perm: 
+        if 'TRAC_ADMIN' in req.perm:
             yield ('mainnav', 'trello',
                 tag.a('Trello', href=req.href.trello()))
-    
+
     # IRequestHandler methods
     def match_request(self, req):
         if 'TRAC_ADMIN' in req.perm:
             match = re.match(r'/trello(?:/(.+))?$', req.path_info)
             if match:
                 if match.group(1):
-                    req.args['controller'] = match.group(1) 
+                    req.args['controller'] = match.group(1)
                 return True
 
     def process_request(self, req):
@@ -60,11 +60,11 @@ class TrelloToTracPlugin(Component):
 
 
     # ITemplateProvider methods
-    # Used to add the plugin's templates and htdocs 
+    # Used to add the plugin's templates and htdocs
     def get_templates_dirs(self):
         from pkg_resources import resource_filename
         return [resource_filename(__name__, 'templates')]
-    
+
     def get_htdocs_dirs(self):
         from pkg_resources import resource_filename
         return [('trello', resource_filename(__name__, 'htdocs'))]
@@ -91,29 +91,29 @@ class TrelloToTracPlugin(Component):
         data = {}
         boardId = ''
         listId = ''
-        
+
         #get trello conf
-        apiKey = self.config.get('trello', 'api_key') 
-        userAuthToken = self.config.get('trello', 'user_auth_token') 
+        apiKey = self.config.get('trello', 'api_key')
+        userAuthToken = self.config.get('trello', 'user_auth_token')
         boardList = self.config.getlist('trello', 'boards')
         listList = self.config.getlist('trello', 'lists')
-        
-        agileTrac = self.config.getbool('trello', 'agile_trac') 
+
+        agileTrac = self.config.getbool('trello', 'agile_trac')
         if agileTrac:
             field_list = TrelloToTracPlugin.__FIELD_AGILE
         else:
             field_list = TrelloToTracPlugin.__FIELD
 
-        estimationTools = self.config.getbool('trello', 'estimationtools') 
+        estimationTools = self.config.getbool('trello', 'estimationtools')
 
-        #start trello 
+        #start trello
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
 
         #get board,list,milestone lists
         boards = self.getBoardList(boardList, trello)
         lists = self.getListList(listList, trello)
         milestones = self.getActiveMilestone()
-        
+
         if req.method == 'POST':
             error_msg = None
             for field in field_list:
@@ -122,7 +122,7 @@ class TrelloToTracPlugin(Component):
                     error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
                     break
                 #validate board exist
-                if field == 'board':           
+                if field == 'board':
                     result = self.validateBoardId(value, trello)
                     if not result['res']:
                         error_msg = result['msg']
@@ -130,15 +130,15 @@ class TrelloToTracPlugin(Component):
                     else:
                         boardId = value
                 #validate list exist
-                if field == 'thelist':           
+                if field == 'thelist':
                     result = self.validateListId(value, trello)
                     if not result['res']:
                         error_msg = result['msg']
                         break
                     else:
                         listId = value
-                #validate milestone exist                
-                if field == 'milestone':           
+                #validate milestone exist
+                if field == 'milestone':
                     result = self.validateMilestone(value)
                     if not result['res']:
                         error_msg = result['msg']
@@ -146,7 +146,7 @@ class TrelloToTracPlugin(Component):
                     else:
                         milestone = value
                 #validate iteration exist
-                if field == 'iteration':           
+                if field == 'iteration':
                     result = self.validateIteration(value)
                     if not result['res']:
                         error_msg = result['msg']
@@ -168,7 +168,7 @@ class TrelloToTracPlugin(Component):
                 keywords = ''
                 component = ''
                 task = 'task'
-                
+
                 board = trelloclient.TrelloBoard(trello, boardId)
                 theList = trelloclient.TrelloList(trello, listId)
                 boardInformation = board.getBoardInformation()
@@ -177,19 +177,19 @@ class TrelloToTracPlugin(Component):
                 cards = theList.getCards()
                 for c in cards:
                     cardContent = {}
-                    cardInformation = c.getCardInformation()            
+                    cardInformation = c.getCardInformation()
 
                     #Content
                     cardContent['id'] = cardInformation['id']
                     cardContent['name'] = cardInformation['name']
                     cardContent['url'] = cardInformation['url']
-                    
+
                     #size and name/title
                     if estimationTools:
                         resultSize = self.getSizeByName(cardInformation['name'])
                         size = resultSize['size']
                         cardContent['name'] = resultSize['name']
-                    
+
                     cardId = cardInformation['id']
                     card = trelloclient.TrelloCard(trello, cardId)
                     createCard = card.getCreateCard()
@@ -197,20 +197,23 @@ class TrelloToTracPlugin(Component):
                     #date
                     dt = parser.parse(createCard['actions'][0]['date'])
                     cardContent['timestamp'] = int(time.mktime(dt.timetuple())-time.timezone)
-                    
+
 
                     #add link to card
                     cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
                     #covert desc markdown to trac wiki
                     m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
                     cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + ' [[br]] \n'
-                    
+
                     idMemberCreator = createCard['actions'][0]['idMemberCreator']
                     reporter = self.getUserByTrelloId(idMemberCreator)
                     if reporter is None:
                         reporter = 'trello'
                     members=card.getMembers()
-                    
+
+                    # owner
+                    owner = self.getFirstMember(members)
+
                     #cc alla assigned member
                     cc = self.addMembersToCc(members)
 
@@ -238,7 +241,7 @@ class TrelloToTracPlugin(Component):
                         #add ticket to iteration
                         if agileTrac:
                             self.addTicketToIteration(idTicket,iteration)
-            
+
                         #add size
                         if estimationTools:
                             estimationToolsField = self.config.get('estimation-tools', 'estimation_field')
@@ -255,7 +258,7 @@ class TrelloToTracPlugin(Component):
                     if error_msg:
                         add_warning(req, error_msg)
                         data = req.args
-        
+
         #forever view data
         data['milestone_placeholder'] = 'milestone name'
         data['iteration_placeholder'] = 'iteration number'
@@ -279,21 +282,21 @@ class TrelloToTracPlugin(Component):
         cardId = ''
 
         #get trello conf
-        apiKey = self.config.get('trello', 'api_key') 
-        userAuthToken = self.config.get('trello', 'user_auth_token') 
+        apiKey = self.config.get('trello', 'api_key')
+        userAuthToken = self.config.get('trello', 'user_auth_token')
         boardList = self.config.getlist('trello', 'boards')
-        
-        agileTrac = self.config.getbool('trello', 'agile_trac') 
+
+        agileTrac = self.config.getbool('trello', 'agile_trac')
         if agileTrac:
             field_list = TrelloToTracPlugin.__FIELD_AGILE_SINGLE
         else:
             field_list = TrelloToTracPlugin.__FIELD_SINGLE
 
-        estimationTools = self.config.getbool('trello', 'estimationtools') 
+        estimationTools = self.config.getbool('trello', 'estimationtools')
 
-        #start trello 
+        #start trello
         trello = trelloclient.TrelloClient(apiKey,userAuthToken)
-        
+
         #get list of boards
         boards = self.getBoardList(boardList, trello)
         milestones = self.getActiveMilestone()
@@ -306,23 +309,23 @@ class TrelloToTracPlugin(Component):
                     error_msg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
                     break
                 #validate board exist
-                if field == 'board':           
+                if field == 'board':
                     result = self.validateBoardId(value, trello)
                     if not result['res']:
                         error_msg = result['msg']
                         break
                     else:
                         boardId = value
-                #validate cardid exist                
-                if field == 'card':           
+                #validate cardid exist
+                if field == 'card':
                     result = self.validateCardShortId(value, boardId, trello)
                     if not result['res']:
                         error_msg = result['msg']
                         break
                     else:
                         cardId = result['id']
-                #validate milestone exist                
-                if field == 'milestone':           
+                #validate milestone exist
+                if field == 'milestone':
                     result = self.validateMilestone(value)
                     if not result['res']:
                         error_msg = result['msg']
@@ -330,7 +333,7 @@ class TrelloToTracPlugin(Component):
                     else:
                         milestone = value
                 #validate iteration exist
-                if field == 'iteration':           
+                if field == 'iteration':
                     result = self.validateIteration(value)
                     if not result['res']:
                         error_msg = result['msg']
@@ -356,15 +359,15 @@ class TrelloToTracPlugin(Component):
                 #get board and card info
                 board = trelloclient.TrelloBoard(trello, boardId)
                 card = trelloclient.TrelloCard(trello,cardId)
-                
+
                 cardContent = {}
-                cardInformation = card.getCardInformation()            
+                cardInformation = card.getCardInformation()
 
                 #Content
                 cardContent['id'] = cardInformation['id']
                 cardContent['name'] = cardInformation['name']
                 cardContent['url'] = cardInformation['url']
-                
+
                 #size and name/title
                 if estimationTools:
                     resultSize = self.getSizeByName(cardInformation['name'])
@@ -376,47 +379,50 @@ class TrelloToTracPlugin(Component):
                 #date
                 dt = parser.parse(createCard['actions'][0]['date'])
                 cardContent['timestamp'] = int(time.mktime(dt.timetuple())-time.timezone)
-                    
+
                 #add link to card
                 cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
                 #covert desc markdown to trac wiki
                 m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
                 cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + ' [[br]] \n'
-                    
+
                 idMemberCreator = createCard['actions'][0]['idMemberCreator']
                 reporter = self.getUserByTrelloId(idMemberCreator)
                 if reporter is None:
                     reporter = 'trello'
                 members=card.getMembers()
-                    
-                #cc alla assigned member
+
+                # owner
+                owner = self.getFirstMember(members)
+
+                # cc alla assigned member
                 cc = self.addMembersToCc(members)
 
-                #checklist
+                # checklist
                 checklists = card.getChecklists()
                 cardContent['desc'] = self.addChecklistsToDesc(checklists, cardContent['desc'], trello)
 
-                #import attachments
+                # import attachments
                 attachments = card.getAttachments()
                 cardContent['desc'] = self.addAttachmentsToDesc(attachments, cardContent['desc'])
 
-                #labels
+                # labels
                 labels = cardInformation['labels']
                 cardContent['desc'] = self.addLabelsToDesc(labels, cardContent['desc'])
 
-                #insert card in ticket
+                # insert card in ticket
                 try:
-                    #id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
+                    # id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
                     cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ task, cardContent['timestamp'], cardContent['timestamp'], component , severity, priority, owner, reporter, cc, version, milestone, status, resolution, cardContent['name'], cardContent['desc'], keywords ])
                     idTicket = cursor.fetchone()[0]
-                    #comment
+                    # comment
                     comments = card.getComments()
                     self.addCommentsToTicket(comments, idTicket)
 
-                    #add ticket to iteration
+                    # add ticket to iteration
                     if agileTrac:
                         self.addTicketToIteration(idTicket,iteration)
-                    #add size
+                    # add size
                     if estimationTools:
                         estimationToolsField = self.config.get('estimation-tools', 'estimation_field')
                         self.addSizeToTicket(size, estimationToolsField, idTicket, cardContent['timestamp'], reporter)
@@ -432,8 +438,8 @@ class TrelloToTracPlugin(Component):
                 if error_msg:
                     add_warning(req, error_msg)
                     data = req.args
-                
-        #forever view data
+
+        # forever view data
         data['card_placeholder'] = 'card short id'
         data['milestone_placeholder'] = 'milestone name'
         data['iteration_placeholder'] = 'iteration number'
@@ -479,15 +485,15 @@ class TrelloToTracPlugin(Component):
         else:
             return {'res':False, 'msg':'Card is not exist.'}
 
-    #validate cardShortId in board
+    # validate cardShortId in board
     def validateCardShortId(self, shortId, boardId, trello):
         result = trello.cardShortIdExist(shortId,boardId)
         if result['res']:
             return {'res':True, 'id':result['id']}
         else:
             return {'res':False, 'msg':'Card is not exist.'}
-    
-    #validate boardId
+
+    # validate boardId
     def validateBoardId(self, boardId, trello):
         result = trello.boardExist(boardId)
         if result['res']:
@@ -495,14 +501,14 @@ class TrelloToTracPlugin(Component):
         else:
             return {'res':False, 'msg':'Board is not exist.'}
 
-    #validate listId
+    # validate listId
     def validateListId(self, listId, trello):
         result = trello.listExist(listId)
         if result['res']:
             return {'res':True, 'boardId': result['boardId']}
         else:
             return {'res':False, 'msg':'List is not exist.'}
-    
+
     def addTicketToIteration(self, idTicket, idIteration):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
@@ -516,7 +522,7 @@ class TrelloToTracPlugin(Component):
             tracUser = self.getUserByTrelloId(m['id'])
             cc += tracUser
             if count < l :
-                cc += ','           
+                cc += ','
             count += 1
         return cc
 
@@ -533,9 +539,9 @@ class TrelloToTracPlugin(Component):
 
     def addAttachmentsToDesc(self, attachments, desc):
         if len(attachments):
-            desc += '[[br]] \n\'\'\'Attachments:\'\'\' [[br]]\n\'\'' 
+            desc += '[[br]] \n\'\'\'Attachments:\'\'\' [[br]]\n\'\''
             for a in attachments:
-                desc += '[' + a['url'] + ' '  + a['name'] + ']\'\' [[br]]\n' 
+                desc += '[' + a['url'] + ' '  + a['name'] + ']\'\' [[br]]\n'
         return desc
 
     def addLabelsToDesc(self, labels, desc):
@@ -584,7 +590,7 @@ class TrelloToTracPlugin(Component):
             board['name'] = b['name']
             boards.append(board)
         return boards
-    
+
     def getListList(self, listList, trello):
         lists = []
         for lId in listList:
@@ -595,10 +601,14 @@ class TrelloToTracPlugin(Component):
             lists.append(lis)
         return lists
 
-    def getActiveMilestone(self): 
+    def getActiveMilestone(self):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
         sql = "SELECT name FROM milestone WHERE completed = 0 ORDER BY name ASC"
         cursor.execute(sql)
         milestones = cursor.fetchall()
         return milestones
+
+    def getFirstMember(self, members):
+        owner = members.pop(0)
+        return self.getUserByTrelloId(owner['id'])

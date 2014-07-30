@@ -17,7 +17,7 @@ class TrelloClient(Client):
     def __init__(self, apiKey, userAuthToken):
         Client.__init__(self, apiKey, userAuthToken )
         #super(TrelloClient, self).__init__( apiKey, userAuthToken )
-    
+
     def cardExist(self, cardId):
         try:
             query_params = {}
@@ -30,7 +30,7 @@ class TrelloClient(Client):
             return {'res':True}
         except urllib2.URLError, e:
             return {'res':False}
-           
+
     def cardShortIdExist(self, cardShortId, boardId):
         try:
             query_params = {}
@@ -40,7 +40,7 @@ class TrelloClient(Client):
             fileHandle = urllib2.urlopen(uri)
             data = fileHandle.read()
             fileHandle.close()
-            data = json.loads( data )  
+            data = json.loads( data )
             return {'res':True,'id':data['id']}
         except urllib2.URLError, e:
             return {'res':False}
@@ -67,7 +67,7 @@ class TrelloClient(Client):
             fileHandle = urllib2.urlopen(uri)
             data = fileHandle.read()
             fileHandle.close()
-            data = json.loads( data )  
+            data = json.loads( data )
             return {'res':True, 'boardId':data['idBoard']}
         except urllib2.URLError, e:
             return {'res':False}
@@ -77,7 +77,7 @@ class TrelloBoard(Board):
         Board.__init__(self, trelloClient, boardId )
         #super(TrelloBoard, self).__init__( trelloClient, boardId )
     def getCardByShortId(self, shortId):
-        return self.fetchJson( 
+        return self.fetchJson(
             uri_path = self.base_uri+'/cards/'+shortId,
             query_params = {}
         )
@@ -87,9 +87,9 @@ class TrelloList(List):
     def __init__(self, trelloClient, listId):
         List.__init__(self, trelloClient, listId )
         #super(TrelloList, self).__init__( trelloClient, listId )
-    
+
     def getActions(self):
-        return self.fetchJson( 
+        return self.fetchJson(
             uri_path = self.base_uri+'/actions',
             query_params = {'fields' : 'all'}
         )
@@ -100,37 +100,47 @@ class TrelloCard(Card):
         #super(TrelloCard, self).__init__( trelloClient, cardId )
 
     def getComments(self):
-        return self.fetchJson( 
+        return self.fetchJson(
             uri_path = self.base_uri+'/actions',
             query_params = {'filter':'commentCard'}
         )
-    
+
     def getChecklists(self):
-        return self.fetchJson( 
+        return self.fetchJson(
             uri_path = self.base_uri+'/idChecklists',
             query_params = {}
         )
 
     def getAttachments(self):
-        return self.fetchJson( 
+        return self.fetchJson(
             uri_path = self.base_uri+'/attachments',
             query_params = {}
         )
 
     def getMembers(self):
-        response = self.fetchJson( 
+        response = self.fetchJson(
         uri_path = self.base_uri,
             query_params = {'members' : 'true', 'limit' : 300}
         )
         return response['members']
 
     def getCreateCard(self):
-        response =  self.fetchJson( 
+        response =  self.fetchJson(
             uri_path = self.base_uri,
             query_params = {'actions' : 'createCard'}
         )
+        if len(response['actions']) != 0:
+            return response
+        else:
+            # date
+            json_action = """
+            {
+                "idMemberCreator": "",
+                "date":""
+            }"""
+            response['actions'].insert(0,json.loads(json_action))
         return response
-    
+
 class TrelloChecklist(Checklist):
     def __init__(self, trelloClient, checklistId):
         Checklist.__init__(self, trelloClient, checklistId )
