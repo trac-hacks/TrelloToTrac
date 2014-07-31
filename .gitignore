@@ -40,3 +40,4 @@ config.ini
 trello-plugin/build/*
 trello-plugin/dist/*
 task
+README.txt
