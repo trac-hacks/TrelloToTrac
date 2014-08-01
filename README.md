@@ -5,6 +5,7 @@ Trac Plugin for Trello Integration
 Converts cards to a board trello and as part of trac tickets.
 Ticktes are associated with a release and a iteretion (AgileTrac).
 
+TrelloToTrac depends from Trolly https://github.com/plish/Trolly v0.1
 
     $ sudo pip install py-trello
     $ sudo pip install trolly
