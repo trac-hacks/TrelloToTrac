@@ -8,13 +8,13 @@ setup(
     author='Matteo Magni',
     author_email='matteo@magni.me',
     url = 'https://github.com/ilbonzo/TrelloToTrac',
-    name='TrelloToTrac', version='0.2',
+    name='TrelloToTrac', version='0.1.1',
     packages=find_packages(exclude=['*.tests*']),
     entry_points = """
         [trac.plugins]
         trello = trello
     """,
     package_data={'trello': ['templates/*.html',
-                            'htdocs/css/*.css', 
+                            'htdocs/css/*.css',
                             'htdocs/images/*']},
 )
