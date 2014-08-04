@@ -238,6 +238,11 @@ class TrelloToTracPlugin(Component):
                         comments = card.getComments()
                         self.addCommentsToTicket(comments, idTicket)
 
+                        # Attach link to card on trello
+                        card.addLinkAttachment(self.getLinkByTicketId(idTicket))
+                        # add trellocard id on ticket custom fields
+                        self.addTrellocardToTicket(idTicket, cardContent['id'])
+
                         #add ticket to iteration
                         if agileTrac:
                             self.addTicketToIteration(idTicket,iteration)
@@ -419,6 +424,11 @@ class TrelloToTracPlugin(Component):
                     comments = card.getComments()
                     self.addCommentsToTicket(comments, idTicket)
 
+                    # Attach link to card on trello
+                    card.addLinkAttachment(self.getLinkByTicketId(idTicket))
+                    # add trellocard id on ticket custom fields
+                    self.addTrellocardToTicket(idTicket, cardContent['id'])
+
                     # add ticket to iteration
                     if agileTrac:
                         self.addTicketToIteration(idTicket,iteration)
@@ -438,6 +448,7 @@ class TrelloToTracPlugin(Component):
                 if error_msg:
                     add_warning(req, error_msg)
                     data = req.args
+
 
         # forever view data
         data['card_placeholder'] = 'card short id'
@@ -610,5 +621,18 @@ class TrelloToTracPlugin(Component):
         return milestones
 
     def getFirstMember(self, members):
-        owner = members.pop(0)
-        return self.getUserByTrelloId(owner['id'])
+        if len(members) > 0:
+            owner = members.pop(0)
+            return self.getUserByTrelloId(owner['id'])
+        else:
+            return None
+
+    def addTrellocardToTicket(self, idTicket, cardId):
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        cursor.execute("INSERT INTO ticket_custom (ticket, name, value) VALUES ((%s), 'trellocard', (%s));", [idTicket, cardId ])
+
+    def getLinkByTicketId(self, idTicket):
+        host = self.config.get('project', 'url')
+        link = host + 'ticket/' + str(idTicket)
+        return link

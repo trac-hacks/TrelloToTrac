@@ -141,6 +141,13 @@ class TrelloCard(Card):
             response['actions'].insert(0,json.loads(json_action))
         return response
 
+    def addLinkAttachment(self, link):
+        return self.fetchJson(
+            uri_path=self.base_uri + '/attachments',
+            http_method='POST',
+            query_params={'url': link, 'name': link}
+        )
+
 class TrelloChecklist(Checklist):
     def __init__(self, trelloClient, checklistId):
         Checklist.__init__(self, trelloClient, checklistId )
