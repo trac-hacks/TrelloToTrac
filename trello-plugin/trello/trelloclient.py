@@ -9,6 +9,7 @@ from trolly.list import List
 from trolly.card import Card
 from trolly.checklist import Checklist
 from trolly.member import Member
+from trolly.trelloobject import TrelloObject
 from trolly import ResourceUnavailable
 
 import urllib2
@@ -71,6 +72,7 @@ class TrelloClient(Client):
             return {'res':True, 'boardId':data['idBoard']}
         except urllib2.URLError, e:
             return {'res':False}
+
 
 class TrelloBoard(Board):
     def __init__(self, trelloClient, boardId):
@@ -148,7 +150,29 @@ class TrelloCard(Card):
             query_params={'url': link, 'name': link}
         )
 
+
 class TrelloChecklist(Checklist):
     def __init__(self, trelloClient, checklistId):
         Checklist.__init__(self, trelloClient, checklistId )
         #super(TrelloChecklist, self).__init__( trelloClient, checklistId )
+
+
+class TrelloWebhook(TrelloObject):
+    def __init__(self, trelloClient, webhookId):
+        super(TrelloWebhook, self).__init__(trelloClient)
+        self.id = webhookId
+        self.base_uri = '/webhook/' + self.id
+
+
+class TrelloWebhookAction(TrelloObject):
+    def __init__(self, trelloClient, actionId):
+        super(TrelloWebhookAction, self).__init__(trelloClient)
+        self.id = actionId
+
+    def loadJson(self, json):
+        self.type = json['action']['type']
+        self.date = json['action']['date']
+        self.idMemberCreator = json['action']['memberCreator']['id']
+        self.data = json['action']['data']
+        self.json = json
+
