@@ -7,6 +7,7 @@ from genshi.builder import tag
 from trac.core import *
 from trac.web import IRequestHandler
 from trac.web.chrome import INavigationContributor, ITemplateProvider, add_warning, add_notice, add_stylesheet
+from trac.ticket.api import ITicketChangeListener
 
 import time
 from datetime import date, datetime, timedelta
@@ -22,7 +23,7 @@ import json
 
 class TrelloToTracPlugin(Component):
 
-    implements(INavigationContributor, IRequestHandler, ITemplateProvider)
+    implements(INavigationContributor, IRequestHandler, ITemplateProvider, ITicketChangeListener)
 
     __FIELD_NAMES = {
                       'board' : 'Board',
@@ -55,18 +56,16 @@ class TrelloToTracPlugin(Component):
                     req.args['controller'] = match.group(1)
                 return True
         else:
-            match = re.match(r'/trello/xmlrpc', req.path_info)
+            match = re.match(r'/trello/webhook', req.path_info)
             if match:
-                req.args['controller'] = 'xmlrpc'
+                req.args['controller'] = 'webhook'
                 return True
 
 
     def process_request(self, req):
         controller = self.controller(req.args.get('controller'))
         response = controller(req)
-
         return response
-
 
     # ITemplateProvider methods
     # Used to add the plugin's templates and htdocs
@@ -84,12 +83,39 @@ class TrelloToTracPlugin(Component):
             user = None
         return user
 
+    # ITicketChangeListener methods
+    # Ticket change hook
+    def ticket_created(self, ticket):
+        pass
+
+    def ticket_changed(self, ticket, comment, author, old_values):
+        if not old_values:
+            #get trello conf
+            apiKey = self.config.get('trello', 'api_key')
+            userAuthToken = self.config.get('trello', 'user_auth_token')
+            trello = trelloclient.TrelloClient(apiKey,userAuthToken)
+            cardId = self.getCardIdByTicketId(ticket.id)
+            if cardId != None:
+                card = trelloclient.TrelloCard(trello, cardId)
+                card.addComments(comment)
+
+
+    def ticket_deleted(self, ticket):
+        pass
+
+    def ticket_comment_modified(self, ticket, cdate, author, comment, old_comment):
+        pass
+
+    def ticket_change_deleted(self, ticket, cdate, changes):
+        pass
+
+
     #controllers
 
     def controller(self, x):
         return {
             'single': self.singleController,
-            'xmlrpc': self.xmlrpcController,
+            'webhook': self.webhookController,
             None: self.indexController,
             }[x]
 
@@ -482,7 +508,7 @@ class TrelloToTracPlugin(Component):
         # Without data the trac layout will not appear.
         return 'single.html', data, None
 
-    def xmlrpcController(self, req):
+    def webhookController(self, req):
         methods = {
                     'commentCard': self.addCommentByAction
         }
@@ -514,7 +540,7 @@ class TrelloToTracPlugin(Component):
         else:
             self.log.debug('Method %s not implemented', action.type)
 
-        return 'xmlrpc.html', data, None
+        return 'webhook.html', data, None
 
     def validateMilestone(self, milestone):
         db = self.env.get_db_cnx()
@@ -690,13 +716,24 @@ class TrelloToTracPlugin(Component):
         link = host + 'ticket/' + str(idTicket)
         return link
 
-    def getTicketByCardId(self, cardId):
+    def getTicketIdByCardId(self, cardId):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
         sql = "SELECT ticket FROM ticket_custom WHERE name = 'trellocard' AND value LIKE %s"
         cursor.execute(sql, [cardId])
         row = cursor.fetchone()
         if row is None:
+            return None
+        else:
+            return row[0]
+
+    def getCardIdByTicketId(self, ticketId):
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        sql = "SELECT value FROM ticket_custom WHERE name = 'trellocard' AND ticket = %s"
+        cursor.execute(sql, [ticketId])
+        row = cursor.fetchone()
+        if row is None or row[0] == '':
             return None
         else:
             return row[0]
@@ -713,7 +750,7 @@ class TrelloToTracPlugin(Component):
     def addCommentByAction(self, action):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
-        idTicket = self.getTicketByCardId(action.data['card']['id'])
+        idTicket = self.getTicketIdByCardId(action.data['card']['id'])
         if idTicket != None:
             comment = {}
             comment['date'] = action.date
