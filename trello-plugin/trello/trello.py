@@ -56,11 +56,18 @@ class TrelloToTracPlugin(Component):
                     req.args['controller'] = match.group(1)
                 return True
         else:
-            match = re.match(r'/trello/webhook', req.path_info)
-            if match:
+            match1 = re.match(r'/trello/webhook', req.path_info)
+            match2 = re.match(r'/trello/sendtotrac', req.path_info)
+            match3 = re.match(r'/trello/activemilestones', req.path_info)
+            if match1:
                 req.args['controller'] = 'webhook'
                 return True
-
+            elif match2:
+                req.args['controller'] = 'sendtotrac'
+                return True
+            elif match3:
+                req.args['controller'] = 'activemilestones'
+                return True
 
     def process_request(self, req):
         controller = self.controller(req.args.get('controller'))
@@ -116,6 +123,8 @@ class TrelloToTracPlugin(Component):
         return {
             'single': self.singleController,
             'webhook': self.webhookController,
+            'sendtotrac': self.sendToTracController,
+            'activemilestones': self.activeMilestonesController,
             None: self.indexController,
             }[x]
 
@@ -541,6 +550,186 @@ class TrelloToTracPlugin(Component):
             self.log.debug('Method %s not implemented', action.type)
 
         return 'webhook.html', data, None
+
+    def sendToTracController(self, req):
+        #start db
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+
+        data = {}
+        boardId = ''
+        cardId = ''
+
+        #get trello conf
+        apiKey = self.config.get('trello', 'api_key')
+        userAuthToken = self.config.get('trello', 'user_auth_token')
+        boardList = self.config.getlist('trello', 'boards')
+
+        agileTrac = self.config.getbool('trello', 'agile_trac')
+        if agileTrac:
+            field_list = TrelloToTracPlugin.__FIELD_AGILE_SINGLE
+        else:
+            field_list = TrelloToTracPlugin.__FIELD_SINGLE
+
+        estimationTools = self.config.getbool('trello', 'estimationtools')
+
+        #start trello
+        trello = trelloclient.TrelloClient(apiKey,userAuthToken)
+
+        #get list of boards
+        boards = self.getBoardList(boardList, trello)
+        milestones = self.getActiveMilestone()
+
+        if req.method == 'GET':
+            error_msg = None
+            for field in field_list:
+                value = req.args.get(field).strip()
+                if len(value) == 0:
+                    error_msgmsg = 'You must fill in the field "' + TrelloToTracPlugin.__FIELD_NAMES[field] + '".'
+                    break
+                # validate cardid exist
+                if field == 'board':
+                    boardId = value
+                # validate cardid exist
+                if field == 'card':
+                    cardId = value
+                # validate milestone exist
+                if field == 'milestone':
+                    result = self.validateMilestone(value)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        milestone = value
+                #validate iteration exist
+                if field == 'iteration':
+                    result = self.validateIteration(value)
+                    if not result['res']:
+                        error_msg = result['msg']
+                        break
+                    else:
+                        iteration = value
+                    break
+            if error_msg:
+                response = error_msg
+            else:
+                #general ticket data
+                owner = ''
+                version = ''
+                severity = 'normale'
+                status = 'new'
+                resolution = ''
+                priority = 'normale'
+                keywords = ''
+                component = ''
+                task = 'task'
+
+                #get board and card info
+                board = trelloclient.TrelloBoard(trello, boardId)
+                card = trelloclient.TrelloCard(trello,cardId)
+
+                cardContent = {}
+                cardInformation = card.getCardInformation()
+
+                #Content
+                cardContent['id'] = cardInformation['id']
+                cardContent['name'] = cardInformation['name']
+                cardContent['url'] = cardInformation['url']
+
+                if (self.ticketCardExist(cardContent['id'])):
+                    error_msg = 'Card "%s" already exists'% cardContent['name']
+                else:
+                    #size and name/title
+                    if estimationTools:
+                        resultSize = self.getSizeByName(cardInformation['name'])
+                        size = resultSize['size']
+                        cardContent['name'] = resultSize['name']
+
+                    createCard = card.getCreateCard()
+
+                    #date
+                    dt = parser.parse(createCard['actions'][0]['date'])
+                    cardContent['timestamp'] = int(time.mktime(dt.timetuple())-time.timezone)
+
+                    #add link to card
+                    cardContent['desc'] = '\'\'\'Card Link:\'\'\'[[br]]\n[' + cardContent['url'] + ' vai a Trello] [[br]] \n'
+                    #covert desc markdown to trac wiki
+                    m2w = markdowntowiki.MarkdownToWiki(cardInformation['desc'])
+                    cardContent['desc'] += '[[br]]\'\'\'Description:\'\'\'[[br]]\n'+m2w.convert() + ' [[br]] \n'
+
+                    idMemberCreator = createCard['actions'][0]['idMemberCreator']
+                    reporter = self.getUserByTrelloId(idMemberCreator)
+                    if reporter is None:
+                        reporter = 'trello'
+                    members=card.getMembers()
+
+                    # owner
+                    owner = self.getFirstMember(members)
+
+                    # cc alla assigned member
+                    cc = self.addMembersToCc(members)
+
+                    # checklist
+                    checklists = card.getChecklists()
+                    cardContent['desc'] = self.addChecklistsToDesc(checklists, cardContent['desc'], trello)
+
+                    # import attachments
+                    attachments = card.getAttachments()
+                    cardContent['desc'] = self.addAttachmentsToDesc(attachments, cardContent['desc'])
+
+                    # labels
+                    labels = cardInformation['labels']
+                    cardContent['desc'] = self.addLabelsToDesc(labels, cardContent['desc'])
+
+                    # insert card in ticket
+                    try:
+                        # id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords
+                        cursor.execute("INSERT INTO ticket (id, type, time, changetime, component, severity, priority, owner, reporter, cc, version, milestone, status, resolution, summary, description, keywords) VALUES (DEFAULT, (%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s),(%s)) RETURNING id;",[ task, cardContent['timestamp'], cardContent['timestamp'], component , severity, priority, owner, reporter, cc, version, milestone, status, resolution, cardContent['name'], cardContent['desc'], keywords ])
+                        idTicket = cursor.fetchone()[0]
+                        # comment
+                        comments = card.getComments()
+                        self.addCommentsToTicket(comments, idTicket)
+
+                        # Attach link to card on trello
+                        card.addLinkAttachment(self.getLinkByTicketId(idTicket))
+                        # add trellocard id on ticket custom fields
+                        self.addTrellocardToTicket(idTicket, cardContent['id'])
+
+                        # add ticket to iteration
+                        if agileTrac:
+                            self.addTicketToIteration(idTicket,iteration)
+                        # add size
+                        if estimationTools:
+                            estimationToolsField = self.config.get('estimation-tools', 'estimation_field')
+                            self.addSizeToTicket(size, estimationToolsField, idTicket, cardContent['timestamp'], reporter)
+
+                    except:
+                        db.rollback()
+                        raise
+                    db.commit()
+
+                    notice_msg='Added card "%s" with id: %s' % (cardContent['name'], idTicket);
+                    response = notice_msg
+
+                if error_msg:
+                    response = error_msg
+
+        req.send_response(200)
+        req.send_header('Content-Type', 'application/json')
+        req.send_header('Content-Length', len(response))
+        req.end_headers()
+        req.write(response)
+
+
+    def activeMilestonesController(self, req):
+        # response = '''{"milestones": ["prima","seconda"]}'''
+        response = json.dumps(self.getActiveMilestone())
+
+        req.send_response(200)
+        req.send_header('Content-Type', 'application/json')
+        req.send_header('Content-Length', len(response))
+        req.end_headers()
+        req.write(response)
 
     def validateMilestone(self, milestone):
         db = self.env.get_db_cnx()
