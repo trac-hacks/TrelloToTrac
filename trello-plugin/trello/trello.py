@@ -951,6 +951,8 @@ class TrelloToTracPlugin(Component):
             comment['date'] = action.date
             comment['idMemberCreator'] = action.idMemberCreator
             comment['data'] = action.data
+            # add trello prefix to comment text
+            comment['data']['text'] = '[trello] ' + comment['data']['text']
             try:
                 self.addCommentToTicket(comment, idTicket)
             except:
