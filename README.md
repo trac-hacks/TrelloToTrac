@@ -42,14 +42,22 @@ Add to trac.ini agiletrac if agiletracplugin is active as
 Add to trac.ini estimationtools if estimationtools is active as
 
     estimationtools = false/true
+
 You can insert estimationtools field value with this format in card name.
 (VALUE) nameofcard
 
+### For use trello and trac sync comment you must:
+
 Add to trac.ini "trellocard" custom field
 
-    trellocard = select
+    trellocard = text
     trellocard.label = Trello Card
     trellocard.value = 0
+
+#### Create webhook on Trello
+https://trello.com/docs/gettingstarted/webhooks.html
+
+https://trello.com/docs/api/webhook/index.html
 
 Final trac.ini
 
