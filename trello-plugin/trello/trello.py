@@ -946,7 +946,7 @@ class TrelloToTracPlugin(Component):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
         idTicket = self.getTicketIdByCardId(action.data['card']['id'])
-        if idTicket != None and not self.isCommentFromTrac(action.data):
+        if idTicket != None and not self.isCommentFromTrac(action.data['text']):
             comment = {}
             comment['date'] = action.date
             comment['idMemberCreator'] = action.idMemberCreator
@@ -962,7 +962,7 @@ class TrelloToTracPlugin(Component):
             return False
 
     def isCommentFromTrac(self, text):
-        return text.startwith('[trac]')
+        return text.startswith('[trac]')
 
     def ticketCardExist(self, cardId):
         db = self.env.get_db_cnx()
