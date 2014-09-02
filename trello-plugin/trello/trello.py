@@ -104,7 +104,7 @@ class TrelloToTracPlugin(Component):
             cardId = self.getCardIdByTicketId(ticket.id)
             if cardId != None:
                 card = trelloclient.TrelloCard(trello, cardId)
-                card.addComments(comment)
+                card.addComments('[trac] ' + comment)
 
 
     def ticket_deleted(self, ticket):
@@ -526,28 +526,34 @@ class TrelloToTracPlugin(Component):
 
         data = {}
 
-        #get trello conf
+        # get trello conf
         apiKey = self.config.get('trello', 'api_key')
         userAuthToken = self.config.get('trello', 'user_auth_token')
 
         data = req.args
 
         # @TODO check ip
-        # remote_addr = req.remote_addr
+        remote_addr = req.remote_addr
         # if (remote_addr == 'x.x.x.x')
 
-        length = int(req.get_header('Content-Length'))
-        body = req.read(length)
-        dataResponse = json.loads(str(body))
-        #start trello
-        trello = trelloclient.TrelloClient(apiKey,userAuthToken)
-        action = trelloclient.TrelloWebhookAction(trello, dataResponse['action']['id'])
-        action.loadJson(dataResponse)
+        self.log.debug("Webhook request form ip: %r", remote_addr)
+        # request for webhook registration
+	if req.get_header('Content-Length') is None or int(req.get_header('Content-Length')) == 0:
+            self.log.debug('Content-Length is None or 0')
+	else:
+            length = int(req.get_header('Content-Length'))
+            body = req.read(length)
+            self.log.debug('body: %r', body)
+            dataResponse = json.loads(str(body))
+            #start trello
+            trello = trelloclient.TrelloClient(apiKey,userAuthToken)
+            action = trelloclient.TrelloWebhookAction(trello, dataResponse['action']['id'])
+            action.loadJson(dataResponse)
 
-        if action.type in methods:
-            result = methods[action.type](action)
-        else:
-            self.log.debug('Method %s not implemented', action.type)
+            if action.type in methods:
+                result = methods[action.type](action)
+            else:
+                self.log.debug('Method %s not implemented', action.type)
 
         return 'webhook.html', data, None
 
@@ -940,7 +946,7 @@ class TrelloToTracPlugin(Component):
         db = self.env.get_db_cnx()
         cursor = db.cursor()
         idTicket = self.getTicketIdByCardId(action.data['card']['id'])
-        if idTicket != None:
+        if idTicket != None and not self.isCommentFromTrac(action.data):
             comment = {}
             comment['date'] = action.date
             comment['idMemberCreator'] = action.idMemberCreator
@@ -954,6 +960,9 @@ class TrelloToTracPlugin(Component):
             return True
         else:
             return False
+
+    def isCommentFromTrac(self, text):
+        return text.startwith('[trac]')
 
     def ticketCardExist(self, cardId):
         db = self.env.get_db_cnx()
